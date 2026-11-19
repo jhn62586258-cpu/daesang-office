@@ -7,14 +7,43 @@
         ".validate": "newData.hasChildren(['n', 'x', 'z']) && newData.child('n').isString() && newData.child('n').val().length <= 10"
       }
     },
+
     "chat": {
       ".read": "auth != null",
+      ".write": "auth != null && !newData.exists()",
       ".indexOn": ["at"],
       "$msgId": {
-        ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid",
+        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('uid').val() === auth.uid))",
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('at').isNumber()"
       }
     },
+
+    "group_chats": {
+      "$roomId": {
+        ".read": "auth != null && data.child('members').child(auth.uid).exists()",
+        ".write": "auth != null && (data.child('members').child(auth.uid).exists() || (!data.exists() && newData.child('members').child(auth.uid).exists()))",
+        "meta": {
+          ".validate": "newData.child('name').isString() && newData.child('name').val().length <= 20"
+        },
+        "messages": {
+          ".indexOn": ["at"],
+          "$msgId": {
+            ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 200 && newData.child('at').isNumber()"
+          }
+        }
+      }
+    },
+
+    "user_rooms": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$roomId": {
+          ".write": "auth != null && (auth.uid === $uid || root.child('group_chats').child($roomId).child('members').child(auth.uid).exists())",
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+
     "board_notes": {
       ".read": "auth != null",
       ".indexOn": ["at"],
@@ -23,6 +52,7 @@
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 60 && newData.child('at').isNumber()"
       }
     },
+
     "desk_notes": {
       ".read": "auth != null",
       ".indexOn": ["at"],
@@ -31,13 +61,41 @@
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
       }
     },
+
+    "desk_notes_archive": {
+      ".read": "auth != null",
+      ".indexOn": ["at"],
+      "$noteId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
+      }
+    },
+
+    "snack_options": {
+      ".read": "auth != null",
+      ".indexOn": ["at"],
+      "$optId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('label').isString() && newData.child('label').val().length >= 1 && newData.child('label').val().length <= 20"
+      }
+    },
+
     "snack_votes": {
       ".read": "auth != null",
       "$week": {
         "$uid": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "newData.child('choice').val().matches(/^(choco|pretzel|zero|capsule|ramen)$/)"
+          ".validate": "newData.child('choice').isString() && newData.child('choice').val().length <= 40"
         }
+      }
+    },
+
+    "custom_restaurants": {
+      ".read": "auth != null",
+      ".indexOn": ["at"],
+      "$restId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30"
       }
     }
   }

@@ -40,10 +40,17 @@ git push -u origin main
 | 경로 | 내용 |
 |---|---|
 | `/presence/{uid_탭}` | 캐릭터 위치·앉기·기분/상태·룰렛 결과 (접속 끊기면 자동 삭제) |
-| `/chat/{pushId}` | 채팅 (최근 40개 표시) |
-| `/board_notes/{id}` | 자유 게시판 포스트잇 |
-| `/desk_notes/{id}` | 책상 쪽지 |
+| `/chat/{msgId}` | 전체 채팅 (최근 60개 표시 · 내 메시지 개별 삭제 · 전체 비우기) |
+| `/group_chats/{roomId}` | 그룹 채팅방 `meta` · `members/{uid}` · `messages` (멤버만 읽기/쓰기) |
+| `/user_rooms/{uid}/{roomId}` | 내가 초대된 방 목록 (멤버에게만 방이 보이도록) |
+| `/board_notes/{id}` | 자유 게시판 포스트잇 (익명이면 이름 미저장) |
+| `/desk_notes/{id}` | 책상에 붙은 쪽지 |
+| `/desk_notes_archive/{id}` | 확인 완료한 쪽지 보관함 |
+| `/snack_options/{id}` | 직원이 추가한 간식 후보 |
 | `/snack_votes/{주차}/{uid}` | 간식 투표 (1인 1표, 매주 월요일 새 회차) |
+| `/custom_restaurants/{id}` | 직원이 추가한 점심 룰렛 식당 |
+
+> 새 버전으로 업데이트할 때는 **`database.rules.json`을 Firebase 콘솔 → Realtime Database → 규칙에 다시 붙여넣고 [게시]** 해야 새 기능이 저장됩니다.
 
 ## 파일 구조
 ```
@@ -53,8 +60,11 @@ git push -u origin main
 ├─ .env.example             ← (선택) 환경변수 방식
 └─ src/
    ├─ firebase.js           ← 🔥 firebaseConfig 붙여넣는 곳
-   ├─ net.js                ← 실시간 멀티플레이 (presence · chat)
-   ├─ notes.js              ← 게시판 · 책상 쪽지 · 간식 투표 저장
+   ├─ db.js                 ← 저장 공통 계층 (Firebase / 로컬 모드 자동 전환)
+   ├─ net.js                ← 실시간 캐릭터 동기화 (presence)
+   ├─ chat.js               ← 전체 채팅 · 그룹 채팅 데이터
+   ├─ ChatPanel.jsx         ← 채팅창 UI (탭 · 그룹방 · 삭제)
+   ├─ notes.js              ← 게시판 · 쪽지 · 보관함 · 간식 투표 · 룰렛 식당
    ├─ main.jsx / App.jsx / store.js
    ├─ layout.js / furniture.js / nav.js     ← 평면도 · 가구 · 길찾기
    ├─ Office.jsx / Extras.jsx / Character.jsx / Player.jsx
@@ -63,5 +73,5 @@ git push -u origin main
 ```
 
 ## 운영 팁
-- 채팅은 계속 쌓입니다. 가끔 Firebase 콘솔에서 `/chat` 노드를 삭제해 정리하세요.
+- 전체 채팅은 채팅창의 [🗑️ 대화 비우기]로 정리할 수 있어요.
 - 익명 로그인이라 누구나 링크로 들어올 수 있습니다. 사내 전용으로 막으려면 Vercel의 **Password Protection**이나 Firebase의 Google 로그인 + 도메인 제한 규칙을 추가하세요.
