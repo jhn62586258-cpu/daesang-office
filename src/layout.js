@@ -70,11 +70,11 @@ export const walls = [
 export const seats = [
   // 설계실 상단 (좌→우)
   { name: '조성화', title: '상무', x: 11.27, z: 0.62, face: 'N', dept: '설계실' },
-  { name: '정지선', title: '실장', x: 13.8, z: 0.62, face: 'N', dept: '설계실' },
+  { name: '정지선', title: '부장', x: 13.8, z: 0.62, face: 'N', dept: '설계실' },
   { name: '최유정', title: '과장', x: 16.3, z: 0.62, face: 'N', dept: '설계실' },
   { name: '김정훈', title: '이사', x: 18.87, z: 0.62, face: 'N', dept: '설계실' },
   // 설계실 하단 좌측 파티션
-  { name: '전현민', title: '사원', x: 11.15, z: 6.22, face: 'S', w: 1.4, dept: '설계실' },
+  { name: '정현민', title: '사원', x: 11.15, z: 6.22, face: 'S', w: 1.4, dept: '설계실' },
   { name: '이서영', title: '과장', x: 12.85, z: 6.22, face: 'S', w: 1.4, dept: '설계실' },
   { name: '김유진', title: '과장', x: 11.15, z: 6.98, face: 'N', w: 1.4, dept: '설계실' },
   { name: '하지현', title: '사원', x: 12.85, z: 6.98, face: 'N', w: 1.4, dept: '설계실' },
