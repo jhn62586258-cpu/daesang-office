@@ -56,6 +56,13 @@ export const useStore = create((set, get) => ({
   timeMode: 'day', // 실제 적용 중인 조명
   musicOn: false,
   toast: null, // 점심 알림 배너
+  globalChat: [], // 전체 채팅 (Firebase /chat)
+  rooms: {}, // 내가 속한 그룹방 { id: { name, members, messages } }
+  readTick: 0,
+  deskArchive: [], // 쪽지 보관함
+  snackOptions: [], // 추가 간식 후보
+  customRestaurants: [], // 추가 식당
+  confirm: null, // 확인창 { title, body, okText, onOk }
 
   join: (me) => set({ me, joined: true }),
   set: (patch) => set(patch),

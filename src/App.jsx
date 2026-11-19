@@ -1,14 +1,16 @@
+import { useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import Office from './Office'
 import { Player, RemotePlayer, ClickMarker, CameraRig } from './Player'
-import { useEffect } from 'react'
-import { EntryModal, Chat, ActionPanel, Modals, HUD, LunchAlerts } from './UI'
+import { EntryModal, ActionPanel, Modals, HUD, LunchAlerts, ConfirmDialog } from './UI'
+import { Chat } from './ChatPanel'
 import { initNet } from './net'
-import { boardNotes, deskNotes, initVotes } from './notes'
+import { initData } from './notes'
+import { initChat } from './chat'
 import { Ambience } from './Ambience'
 import { useStore } from './store'
-import { W, D, START } from './layout'
+import { START } from './layout'
 
 function Remotes() {
   const remotes = useStore((s) => s.remotes)
@@ -23,10 +25,9 @@ export default function App() {
   useEffect(() => {
     if (started) return
     started = true
-    initNet()
-    boardNotes.init()
-    deskNotes.init()
-    initVotes()
+    initNet() // 캐릭터 위치·상태 (presence)
+    initData() // 게시판·쪽지·보관함·간식 투표·룰렛 식당
+    initChat() // 전체 채팅 + 그룹 채팅
   }, [])
   return (
     <>
@@ -53,6 +54,7 @@ export default function App() {
       <ActionPanel />
       <Modals />
       <EntryModal />
+      <ConfirmDialog />
     </>
   )
 }

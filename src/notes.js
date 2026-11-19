@@ -1,19 +1,18 @@
-// 영구 저장 데이터 (게시판 메모 · 책상 쪽지 · 간식 투표)
-//
-// ▸ Firebase 모드: Realtime Database
-//   /board_notes/{id}            게시판 포스트잇
-//   /desk_notes/{id}             책상 쪽지
-//   /snack_votes/{주차}/{uid}     간식 투표 (1인 1표, 매주 월요일 새 회차)
-// ▸ 로컬 모드: localStorage + BroadcastChannel (+ 다른 탭에는 presence로 임시 전달)
-import { ref, set, remove as fbRemove, onValue, query, orderByChild, limitToLast } from 'firebase/database'
+// 영구 저장 데이터
+//   /board_notes/{id}             사내 자유 게시판 포스트잇 (익명 가능)
+//   /desk_notes/{id}              책상에 붙은 쪽지
+//   /desk_notes_archive/{id}      확인 완료(떼어낸) 쪽지 보관함
+//   /snack_options/{id}           직원이 추가한 간식 후보
+//   /snack_votes/{주차}/{uid}      간식 투표 (1인 1표, 매주 월요일 새 회차)
+//   /custom_restaurants/{id}      직원이 추가한 점심 룰렛 식당
 import { useStore, uid } from './store'
-import { firebaseReady } from './firebase'
+import { dbOn, dbSet, dbRemove, myUid, isFirebase, dbReady } from './db'
 
 const HEX = /^#[0-9a-fA-F]{6}$/
-const removedIds = new Set() // 떼어낸 임시 메모가 다시 붙지 않게
-
 const s = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '')
-function clean(id, d) {
+const n0 = (v) => (typeof v === 'number' && isFinite(v) ? v : 0)
+
+function cleanNote(id, d) {
   if (!d || typeof d !== 'object') return null
   return {
     id,
@@ -21,119 +20,90 @@ function clean(id, d) {
     color: typeof d.color === 'string' && HEX.test(d.color) ? d.color : '#fff176',
     name: s(d.name, 10),
     title: s(d.title, 6),
-    at: typeof d.at === 'number' ? d.at : 0,
+    anon: !!d.anon,
+    at: n0(d.at),
     authorId: s(d.authorId, 40),
     tilt: typeof d.tilt === 'number' ? Math.max(-0.2, Math.min(0.2, d.tilt)) : 0,
     seat: s(d.seat, 10),
+    checkedAt: n0(d.checkedAt),
+    checkedBy: s(d.checkedBy, 20),
   }
 }
+const toList = (obj, cleaner) =>
+  Object.entries(obj || {})
+    .map(([k, v]) => cleaner(k, v))
+    .filter((x) => x && (x.text || x.label || x.name))
+    .sort((a, b) => b.at - a.at)
 
-// 메모형 컬렉션 하나를 관리하는 저장소
-function makeNoteStore({ collection, lsKey, stateKey, modeKey, max = 80 }) {
-  let fb = null
-  let bc = null
-  const setList = (list) =>
-    useStore.setState((st) => {
-      const eph = st[stateKey].filter((n) => n.ephemeral && !list.some((m) => m.id === n.id))
-      return { [stateKey]: [...list, ...eph].sort((a, b) => b.at - a.at) }
+const mode = () => (isFirebase() ? 'shared' : 'local')
+
+/* ───────── 초기화: 모든 구독 시작 ───────── */
+export async function initData() {
+  await dbReady()
+  const st = useStore.getState()
+  st.set({ notesMode: mode(), deskMode: mode(), voteMode: mode() })
+  dbOn('board_notes', (v) => useStore.getState().set({ notes: toList(v, cleanNote) }), { last: 80 })
+  dbOn('desk_notes', (v) => useStore.getState().set({ deskNotes: toList(v, cleanNote) }), { last: 200 })
+  dbOn('desk_notes_archive', (v) => useStore.getState().set({ deskArchive: toList(v, cleanNote) }), { last: 300 })
+  dbOn('snack_options', (v) =>
+    useStore.getState().set({
+      snackOptions: toList(v, (k, d) => (d && typeof d === 'object' ? { id: k, label: s(d.label, 20), emoji: s(d.emoji, 4) || '🍬', by: s(d.by, 20), at: n0(d.at) } : null)).reverse(),
     })
-  const loadLocal = () => {
-    try {
-      const arr = JSON.parse(localStorage.getItem(lsKey) || '[]')
-      return Array.isArray(arr) ? arr.map((d) => clean(d.id, d)).filter(Boolean) : []
-    } catch {
-      return []
-    }
-  }
-  const saveLocal = (list) => {
-    try {
-      localStorage.setItem(lsKey, JSON.stringify(list.filter((n) => !n.ephemeral).slice(0, max)))
-    } catch {}
-  }
-  const goLocal = () => {
-    fb = null
-    useStore.getState().set({ [modeKey]: 'local' })
-    setList(loadLocal())
-    if (!bc && typeof BroadcastChannel !== 'undefined') {
-      try {
-        bc = new BroadcastChannel(lsKey)
-        bc.onmessage = () => setList(loadLocal())
-      } catch {}
-    }
-  }
-  return {
-    async init() {
-      fb = await firebaseReady()
-      if (!fb) return goLocal()
-      useStore.getState().set({ [modeKey]: 'shared' })
-      onValue(
-        query(ref(fb.db, collection), orderByChild('at'), limitToLast(max)),
-        (snap) => {
-          const list = []
-          snap.forEach((c) => {
-            const n = clean(c.key, c.val())
-            if (n && n.text) list.push(n)
-          })
-          setList(list)
-        },
-        (e) => {
-          console.warn(`[Firebase] ${collection} 읽기 실패 — 보안 규칙을 확인하세요.`, e)
-          goLocal()
-        }
-      )
-    },
-    async add(fields) {
-      const me = useStore.getState().me
-      const note = { id: 'n' + Date.now().toString(36) + uid(), name: me.name, title: me.title, at: Date.now(), authorId: me.id, tilt: (Math.random() - 0.5) * 0.24, ...fields }
-      if (fb) {
-        try {
-          const { id, ...body } = note
-          await set(ref(fb.db, `${collection}/${id}`), body)
-          return { shared: true }
-        } catch (e) {
-          console.warn(`[Firebase] ${collection} 저장 실패`, e)
-        }
-      }
-      const list = [note, ...loadLocal()]
-      saveLocal(list)
-      setList(list)
-      bc && bc.postMessage('changed')
-      return { shared: false }
-    },
-    async remove(note) {
-      removedIds.add(note.id)
-      if (fb && !note.ephemeral) {
-        try {
-          await fbRemove(ref(fb.db, `${collection}/${note.id}`))
-          return
-        } catch {}
-      }
-      saveLocal(loadLocal().filter((n) => n.id !== note.id))
-      useStore.setState((st) => ({ [stateKey]: st[stateKey].filter((n) => n.id !== note.id) }))
-      bc && bc.postMessage('changed')
-    },
-  }
+  )
+  dbOn(`snack_votes/${voteWeek()}`, (v) => {
+    const votes = {}
+    for (const [k, d] of Object.entries(v || {})) if (d && typeof d.choice === 'string') votes[k] = d.choice.slice(0, 40)
+    useStore.getState().set({ sharedVotes: votes, myVote: votes[myUid()] || null })
+  })
+  dbOn('custom_restaurants', (v) =>
+    useStore.getState().set({
+      customRestaurants: toList(v, (k, d) => (d && typeof d === 'object' ? { id: k, name: s(d.name, 30), by: s(d.by, 20), at: n0(d.at) } : null)).reverse(),
+    })
+  )
 }
 
-export const boardNotes = makeNoteStore({ collection: 'board_notes', lsKey: 'archi-office-3d-notes', stateKey: 'notes', modeKey: 'notesMode' })
-export const deskNotes = makeNoteStore({ collection: 'desk_notes', lsKey: 'archi-office-3d-desknotes', stateKey: 'deskNotes', modeKey: 'deskMode', max: 200 })
-
-export const addNote = (f) => boardNotes.add({ text: f.text.slice(0, 60), color: f.color })
-export const deleteNote = (n) => boardNotes.remove(n)
-
-// 로컬 모드: 다른 탭이 presence로 보낸 임시 메모 병합
-export function mergeEphemeral(stateKey, peerId, arr) {
-  const incoming = arr
-    .map((d) => clean(s(d && d.id, 40), d))
-    .filter((n) => n && n.id && n.text && !removedIds.has(n.id))
-    .map((n) => ({ ...n, authorId: peerId, ephemeral: true }))
-  if (!incoming.length) return
-  useStore.setState((st) => {
-    const have = new Set(st[stateKey].map((n) => n.id))
-    const fresh = incoming.filter((n) => !have.has(n.id))
-    return fresh.length ? { [stateKey]: [...st[stateKey], ...fresh].sort((a, b) => b.at - a.at) } : {}
+/* ───────── 게시판 메모 ───────── */
+export async function addNote({ text, color, anon }) {
+  const me = useStore.getState().me
+  const id = 'n' + Date.now().toString(36) + uid()
+  await dbSet(`board_notes/${id}`, {
+    text: text.slice(0, 60),
+    color,
+    anon: !!anon,
+    name: anon ? '' : me.name, // 익명이면 이름을 아예 저장하지 않음
+    title: anon ? '' : me.title,
+    at: Date.now(),
+    authorId: myUid(),
+    tilt: (Math.random() - 0.5) * 0.24,
   })
 }
+export const deleteNote = (note) => dbRemove(`board_notes/${note.id}`)
+export const noteAuthor = (n) => (n.anon || !n.name ? '익명' : `${n.name} ${n.title}`.trim())
+
+/* ───────── 책상 쪽지 + 보관함 ───────── */
+export async function addDeskNote({ seat, text, color }) {
+  const me = useStore.getState().me
+  const id = 'd' + Date.now().toString(36) + uid()
+  await dbSet(`desk_notes/${id}`, {
+    seat,
+    text: text.slice(0, 50),
+    color,
+    name: me.name,
+    title: me.title,
+    at: Date.now(),
+    authorId: myUid(),
+    tilt: (Math.random() - 0.5) * 0.24,
+  })
+}
+
+// 확인 완료(떼어내기) → 보관함으로 이동
+export async function archiveDeskNote(note) {
+  const me = useStore.getState().me
+  const { id, ...body } = note
+  await dbSet(`desk_notes_archive/${id}`, { ...body, checkedAt: Date.now(), checkedBy: `${me.name} ${me.title}` })
+  await dbRemove(`desk_notes/${id}`)
+}
+export const deleteArchived = (note) => dbRemove(`desk_notes_archive/${note.id}`)
 
 /* ───────── 간식 투표 ───────── */
 export const SNACKS = [
@@ -143,7 +113,14 @@ export const SNACKS = [
   { k: 'capsule', e: '☕', l: '아메리카노 캡슐', c: '#6f4e37' },
   { k: 'ramen', e: '🍜', l: '컵라면 / 에너지바', c: '#e8590c' },
 ]
-const SNACK_KEYS = SNACKS.map((x) => x.k)
+const EXTRA_COLORS = ['#cc5de8', '#20c997', '#ff6b6b', '#fab005', '#5c7cfa', '#f06595', '#94d82d', '#15aabf']
+const SNACK_EMOJI = { 젤리: '🍬', 아이스크림: '🍦', 빵: '🍞', 도넛: '🍩', 쿠키: '🍪', 과일: '🍎', 요거트: '🥛', 우유: '🥛', 견과: '🥜', 떡: '🍡', 치즈: '🧀', 사탕: '🍭', 녹차: '🍵', 차: '🍵', 주스: '🧃', 바나나: '🍌', 케이크: '🍰', 초콜릿: '🍫', 감자: '🥔', 팝콘: '🍿' }
+
+// 기본 후보 + 직원이 추가한 후보
+export function snackList(st) {
+  const custom = st.snackOptions.map((o, i) => ({ k: 'c_' + o.id, e: o.emoji, l: o.label, c: EXTRA_COLORS[i % EXTRA_COLORS.length], custom: o }))
+  return [...SNACKS, ...custom]
+}
 
 // 투표 회차 = 이번 주 월요일(KST)
 export function voteWeek() {
@@ -153,74 +130,37 @@ export function voteWeek() {
   return mon.toISOString().slice(0, 10)
 }
 
-const LS_VOTE = 'archi-office-3d-vote'
-let voteFb = null
-let voteBc = null
-
-export async function initVotes() {
-  const week = voteWeek()
-  try {
-    const v = JSON.parse(localStorage.getItem(LS_VOTE) || 'null')
-    if (v && v.week === week && SNACK_KEYS.includes(v.choice)) useStore.getState().set({ myVote: v.choice })
-  } catch {}
-  voteFb = await firebaseReady()
-  if (voteFb) {
-    useStore.getState().set({ voteMode: 'shared' })
-    onValue(
-      ref(voteFb.db, `snack_votes/${week}`),
-      (snap) => {
-        const votes = {}
-        snap.forEach((c) => {
-          const v = c.val()
-          if (v && SNACK_KEYS.includes(v.choice)) votes[c.key] = v.choice
-        })
-        useStore.getState().set({ sharedVotes: votes })
-        if (votes[voteFb.uid]) useStore.getState().set({ myVote: votes[voteFb.uid] })
-      },
-      () => {
-        voteFb = null
-        useStore.getState().set({ voteMode: 'local' })
-      }
-    )
-    return
-  }
-  useStore.getState().set({ voteMode: 'local' })
-  if (typeof BroadcastChannel !== 'undefined') {
-    try {
-      voteBc = new BroadcastChannel(LS_VOTE)
-      voteBc.onmessage = (e) => e.data && SNACK_KEYS.includes(e.data) && useStore.getState().set({ myVote: e.data })
-    } catch {}
-  }
-}
-
 export async function castVote(choice) {
-  if (!SNACK_KEYS.includes(choice)) return
   const st = useStore.getState()
+  if (!snackList(st).some((x) => x.k === choice)) return
   st.set({ myVote: choice })
-  const week = voteWeek()
-  try {
-    localStorage.setItem(LS_VOTE, JSON.stringify({ week, choice }))
-  } catch {}
-  if (voteFb) {
-    try {
-      await set(ref(voteFb.db, `snack_votes/${week}/${voteFb.uid}`), { choice, at: Date.now(), name: st.me.name, title: st.me.title })
-      return true
-    } catch (e) {
-      console.warn('[Firebase] 투표 저장 실패', e)
-    }
-  }
-  voteBc && voteBc.postMessage(choice)
-  return false
+  await dbSet(`snack_votes/${voteWeek()}/${myUid()}`, { choice, at: Date.now(), name: st.me.name, title: st.me.title })
 }
 
-// 집계: Firebase 표 / (로컬 모드) 내 표 + 다른 탭의 표
+export async function addSnackOption(label) {
+  const t = label.trim().slice(0, 20)
+  if (!t) return
+  const me = useStore.getState().me
+  const emoji = Object.entries(SNACK_EMOJI).find(([k]) => t.includes(k))?.[1] || '🍬'
+  const id = 's' + Date.now().toString(36) + uid()
+  await dbSet(`snack_options/${id}`, { label: t, emoji, by: `${me.name} ${me.title}`, at: Date.now() })
+}
+export const removeSnackOption = (opt) => dbRemove(`snack_options/${opt.id}`)
+
+// 집계 (삭제된 후보에 대한 표는 제외)
 export function tally(st) {
-  const counts = Object.fromEntries(SNACK_KEYS.map((k) => [k, 0]))
-  if (st.voteMode === 'shared') {
-    for (const v of Object.values(st.sharedVotes)) counts[v]++
-  } else {
-    if (st.myVote) counts[st.myVote]++
-    for (const r of Object.values(st.remotes)) if (r.vote && r.voteWeek === voteWeek() && counts[r.vote] !== undefined) counts[r.vote]++
-  }
+  const list = snackList(st)
+  const counts = Object.fromEntries(list.map((x) => [x.k, 0]))
+  for (const v of Object.values(st.sharedVotes)) if (counts[v] !== undefined) counts[v]++
   return counts
 }
+
+/* ───────── 점심 룰렛 식당 ───────── */
+export async function addRestaurant(name) {
+  const t = name.trim().slice(0, 30)
+  if (!t) return
+  const me = useStore.getState().me
+  const id = 'r' + Date.now().toString(36) + uid()
+  await dbSet(`custom_restaurants/${id}`, { name: t, by: `${me.name} ${me.title}`, at: Date.now() })
+}
+export const removeRestaurant = (r) => dbRemove(`custom_restaurants/${r.id}`)

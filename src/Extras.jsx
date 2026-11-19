@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { BOARD, ROULETTE } from './layout'
 import { live, useStore } from './store'
 import { RESTAURANTS, WHEEL_COLORS } from './restaurants'
+import { noteAuthor } from './notes'
 
 const FONT = '"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif'
 
@@ -59,12 +60,12 @@ function noteTexture(note) {
     g.font = `600 20px ${FONT}`
     g.fillStyle = 'rgba(45,42,38,0.65)'
     g.textAlign = 'right'
-    g.fillText(`- ${note.name} ${note.title}`, 238, 222)
+    g.fillText(`- ${noteAuthor(note)}`, 238, 222)
   })
 }
 
 function Note3D({ note, pos }) {
-  const map = useMemo(() => noteTexture(note), [note.id, note.text, note.color])
+  const map = useMemo(() => noteTexture(note), [note.id, note.text, note.color, note.anon, note.name])
   useEffect(() => () => map.dispose(), [map])
   const ref = useRef()
   const hover = useRef(false)
@@ -191,10 +192,11 @@ function EmptyHint({ y }) {
 export function Roulette3D() {
   const wheel = useRef()
   const bulbs = useRef([])
+  const customCount = useStore((s) => s.customRestaurants.length) // 식당이 추가되면 칸 수도 바뀜
   const wheelTex = useMemo(
     () =>
       makeTex(512, 512, (g) => {
-        const n = RESTAURANTS.length
+        const n = RESTAURANTS.length + customCount
         const cx = 256
         for (let i = 0; i < n; i++) {
           g.beginPath()
@@ -212,8 +214,9 @@ export function Roulette3D() {
         g.arc(cx, cx, 120, 0, Math.PI * 2)
         g.fill()
       }),
-    []
+    [customCount]
   )
+  useEffect(() => () => wheelTex.dispose(), [wheelTex])
   const sign = useMemo(
     () =>
       makeTex(1024, 300, (g) => {

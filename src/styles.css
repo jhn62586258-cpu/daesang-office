@@ -396,3 +396,160 @@ kbd {
   .bell-tests { display: none; }
 }
 .local-badge { font-style: normal; font-size: 10.5px; background: #ffe8cc; color: #a05a00; padding: 1px 7px; border-radius: 999px; margin-left: 4px; }
+
+/* ════════ v3: 채팅 탭 · 그룹방 · 보관함 · 익명 · 후보 추가 ════════ */
+.chat { width: min(370px, calc(100vw - 28px)); }
+.chat-head { padding: 7px 8px 7px 8px; gap: 6px; cursor: default; }
+.chat-tabs { display: flex; gap: 3px; background: rgba(255,255,255,.4); padding: 3px; border-radius: 11px; }
+.chat-tabs button {
+  position: relative; border: 0; background: transparent; padding: 6px 10px; border-radius: 8px;
+  font-weight: 800; font-size: 12.5px; color: #42505c; white-space: nowrap;
+}
+.chat-tabs button.on { background: #fff; color: #1f2a33; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.red-dot {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 5px;
+  margin-left: 5px; border-radius: 999px; background: #fa5252; color: #fff; font-size: 10.5px; font-weight: 900;
+  box-shadow: 0 0 0 2px #fff; animation: pop .3s ease-out;
+}
+.red-dot.big { min-width: 22px; height: 22px; font-size: 11.5px; }
+.chat-head-right { display: flex; gap: 4px; align-items: center; }
+.mini-btn {
+  border: 0; background: rgba(255,255,255,.75); color: #3d4852; border-radius: 9px; padding: 5px 8px;
+  font-size: 11.5px; font-weight: 800; white-space: nowrap;
+}
+.mini-btn:hover { background: #fff; }
+.mini-btn.ghosty { background: transparent; font-size: 14px; padding: 3px 7px; }
+.mini-btn.danger { color: #c92a2a; }
+.msg.mine { position: relative; }
+.msg-del {
+  border: 0; background: rgba(0,0,0,.08); color: #495057; width: 18px; height: 18px; border-radius: 50%;
+  font-size: 13px; line-height: 16px; padding: 0; opacity: 0; transition: opacity .15s; align-self: center;
+}
+.msg.mine:hover .msg-del, .msg-del:focus { opacity: 1; }
+@media (hover: none) { .msg-del { opacity: .6; } }
+
+/* 그룹방 목록 */
+.room-list { height: 278px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+.new-room {
+  border: 2px dashed rgba(60,110,113,.45); background: rgba(255,255,255,.55); color: #2b5052; padding: 10px;
+  border-radius: 13px; font-weight: 800; font-size: 13px;
+}
+.new-room:hover { background: #fff; }
+.room-empty { text-align: center; color: #55636f; font-size: 12.5px; padding: 24px 6px; line-height: 1.6; }
+.room-item {
+  display: flex; align-items: center; gap: 9px; border: 0; background: rgba(255,255,255,.85); padding: 9px 10px;
+  border-radius: 13px; text-align: left; font-family: inherit; transition: transform .1s;
+}
+.room-item:hover { transform: translateX(3px); background: #fff; }
+.ri-ico { width: 34px; height: 34px; border-radius: 11px; background: #2f3e46; display: grid; place-items: center; font-size: 15px; flex: none; }
+.ri-body { flex: 1; min-width: 0; }
+.ri-top { display: flex; gap: 6px; align-items: baseline; }
+.ri-top b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ri-top span { font-size: 11px; color: #7a8792; flex: none; }
+.ri-last { font-size: 12px; color: #55636f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.room-head { display: flex; align-items: center; gap: 5px; padding: 7px 8px; background: rgba(47,62,70,.12); }
+.rh-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rh-info b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-info span { font-size: 10.5px; color: #55636f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-list.room { height: 196px; background: rgba(47,62,70,.06); }
+
+/* 새 그룹방 */
+.people { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding: 2px; }
+.person {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 12px; border: 1.5px solid #ece5d9;
+  background: #fff; cursor: pointer; font-size: 14px; color: #2b2a28; font-weight: 700;
+}
+.person.on { border-color: #3c6e71; background: #eef6f5; }
+.person input { width: 17px; height: 17px; accent-color: #3c6e71; }
+.person .ava { width: 28px; height: 28px; font-size: 12px; }
+.person .pn { flex: 1; }
+.person small { color: #8a8174; font-weight: 600; }
+.pick-count { font-style: normal; color: #3c6e71; margin-left: 4px; }
+.me-line { font-size: 12px; color: #8a6d3b; font-weight: 700; margin: 10px 0 12px; }
+
+/* 확인창 */
+.confirm-bg { z-index: 200; }
+.sheet.confirm { width: min(360px, 100%); }
+.sheet.confirm h2 { padding-right: 0; }
+.danger-go { background: linear-gradient(135deg, #ff6b6b, #e03131) !important; color: #fff !important; box-shadow: 0 6px 16px rgba(224,49,49,.3) !important; }
+
+/* 익명 메모 */
+.note-preview .sign { position: absolute; left: 18px; bottom: 10px; font-size: 12.5px; font-weight: 700; color: rgba(45,42,38,.6); }
+.anon-check {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 9px; align-items: center;
+  padding: 10px 12px; border-radius: 13px; border: 1.5px solid #ece5d9; background: #fff; cursor: pointer;
+}
+.anon-check.on { border-color: #7950f2; background: #f3f0ff; }
+.anon-check input { grid-row: 1 / 3; width: 18px; height: 18px; accent-color: #7950f2; }
+.anon-check span { font-weight: 800; font-size: 14px; }
+.anon-check small { color: #7a7266; font-size: 11.5px; }
+
+/* 쪽지 보관함 */
+.me-row { display: flex; gap: 8px; align-items: stretch; }
+.archive-btn {
+  border: 0; background: rgba(255,253,248,.92); backdrop-filter: blur(8px); border-radius: 16px; padding: 0 14px;
+  font-weight: 800; font-size: 13px; color: #2b2a28; box-shadow: 0 2px 12px rgba(0,0,0,.12); display: flex; align-items: center; gap: 6px;
+}
+.archive-btn:hover { background: #fff; }
+.archive-btn b { background: #ff8fab; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; }
+.note-hint { text-align: center; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5); margin: 8px 0 0; }
+.arch-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.arch-tabs button { border: 1.5px solid #ece5d9; background: #fff; border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; color: #5b544a; }
+.arch-tabs button b { color: #d6336c; margin-left: 2px; }
+.arch-tabs button.on { border-color: #ff8fab; background: #fff0f4; color: #2b2a28; }
+.arch-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.arch-item { display: flex; align-items: stretch; background: #fff; border: 1px solid #ece5d9; border-radius: 13px; overflow: hidden; }
+.arch-color { width: 8px; flex: none; }
+.arch-main { flex: 1; border: 0; background: transparent; text-align: left; padding: 10px 12px; font-family: inherit; min-width: 0; }
+.arch-main:hover { background: #fffaf0; }
+.arch-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.arch-top b { color: #2b2a28; }
+.arch-top span { color: #8a8174; white-space: nowrap; }
+.arch-text { font-size: 14.5px; font-weight: 700; color: #2d2a26; margin: 4px 0; word-break: break-all; }
+.arch-meta { font-size: 11px; color: #9a9184; }
+.arch-del { border: 0; border-left: 1px solid #f1ebe1; background: #fff; padding: 0 14px; font-size: 15px; }
+.arch-del:hover { background: #fff0f0; }
+.note-big.archived { filter: saturate(.8); }
+.note-big small + small { margin-top: 0; }
+
+/* 간식 후보 추가 */
+.vote-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.vote-opt { padding: 0; display: block; }
+.vote-hit {
+  width: 100%; height: 100%; border: 0; background: transparent; padding: 12px 4px 10px; display: flex; flex-direction: column;
+  align-items: center; gap: 4px; font-family: inherit; border-radius: 14px;
+}
+.vby { font-size: 10px; color: #9a9184; }
+.vote-x {
+  position: absolute; top: 4px; left: 5px; width: 20px; height: 20px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.07); color: #6d655a; font-size: 13px; line-height: 18px; padding: 0;
+}
+.vote-x:hover { background: #ffe3e3; color: #c92a2a; }
+.add-row { display: flex; gap: 8px; margin-top: 12px; }
+.add-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid #e2dacd; outline: none;
+}
+.add-row input:focus { border-color: #f2a516; }
+.add-btn {
+  border: 0; border-radius: 12px; padding: 0 14px; font-weight: 800; font-size: 13px; white-space: nowrap;
+  background: #2f3e46; color: #fff;
+}
+.add-btn:disabled { background: #c9c3b8; }
+
+/* 룰렛 식당 편집 */
+.roulette-sheet .sheet-foot { justify-content: center; }
+.rest-edit { margin-top: 14px; text-align: left; background: #f8f4ec; border-radius: 16px; padding: 12px 14px; }
+.rest-edit .add-row { margin-top: 0; }
+.rest-title { font-size: 12.5px; font-weight: 800; color: #8a6d3b; margin: 12px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #ece5d9; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: #4b4740; }
+.chip.custom { border-color: #ffd43b; background: #fff9db; font-weight: 800; }
+.chip button { border: 0; background: rgba(0,0,0,.08); width: 17px; height: 17px; border-radius: 50%; font-size: 12px; line-height: 15px; padding: 0; color: #6d655a; }
+.chip button:hover { background: #ffe3e3; color: #c92a2a; }
+.chip-empty { font-size: 12px; color: #9a9184; }
+.rest-default { margin-top: 10px; }
+.rest-default summary { cursor: pointer; font-size: 12px; font-weight: 700; color: #6d655a; margin-bottom: 6px; }
+@media (max-width: 720px) {
+  .archive-btn { padding: 8px 12px; }
+  .me-row { flex-direction: column; align-items: flex-end; }
+}

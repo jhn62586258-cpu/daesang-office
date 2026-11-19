@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { seats } from './layout'
 import { live, useStore, MOODS, STATUSES, fmtTime, uid } from './store'
-import { addNote, deleteNote, deskNotes as deskStore, SNACKS, castVote, tally, voteWeek } from './notes'
+import {
+  addNote,
+  deleteNote,
+  noteAuthor,
+  addDeskNote,
+  archiveDeskNote,
+  deleteArchived,
+  snackList,
+  castVote,
+  tally,
+  voteWeek,
+  addSnackOption,
+  removeSnackOption,
+  addRestaurant,
+  removeRestaurant,
+} from './notes'
+import { myUid } from './db'
 import { startMusic, stopMusic, setRain, playChime } from './lofi'
 import { kstNow, MODE_LABEL } from './Ambience'
-import { spinWheel3D, sendChat } from './net'
+import { spinWheel3D } from './net'
 import { RESTAURANTS, WHEEL_COLORS } from './restaurants'
 
-const TITLES = ['대표님', '이사', '상무', '실장', '부장', '과장', '대리', '주임', '사원', '인턴']
+const TITLES = ['대표님', '전무', '이사', '상무', '실장', '부장', '과장', '대리', '주임', '사원', '인턴']
 const SHIRTS = [
   { c: '#a8d0e6', n: '스카이 블루' },
   { c: '#ffffff', n: '화이트' },
@@ -39,7 +55,53 @@ function persistentId() {
   }
 }
 
-const sysMsg = (text, extra = {}) => useStore.getState().addMessage({ id: 'sys' + uid(), system: true, text, time: fmtTime(new Date()), ...extra })
+// 내 화면에만 보이는 안내 메시지 (채팅창 가운데 회색 줄)
+export const sysMsg = (text, extra = {}) =>
+  useStore.getState().addMessage({ id: 'sys' + uid(), system: true, text, time: fmtTime(new Date()), at: Date.now(), ...extra })
+
+// 확인창 열기
+export const askConfirm = (opts) => useStore.getState().set({ confirm: opts })
+
+/* ───────────────────── 확인창 ───────────────────── */
+export function ConfirmDialog() {
+  const c = useStore((s) => s.confirm)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!c) return
+    const k = (e) => e.key === 'Escape' && useStore.getState().set({ confirm: null })
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [c])
+  if (!c) return null
+  const close = () => useStore.getState().set({ confirm: null })
+  const ok = async () => {
+    setBusy(true)
+    try {
+      await c.onOk()
+    } catch (e) {
+      console.warn(e)
+      sysMsg('⚠️ 처리하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
+    setBusy(false)
+    close()
+  }
+  return (
+    <div className="modal-bg soft confirm-bg" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="sheet confirm">
+        <h2>{c.title}</h2>
+        {c.body && <p className="sub">{c.body}</p>}
+        <div className="sheet-foot">
+          <button className="ghost" onClick={close}>
+            취소
+          </button>
+          <button className={'go small' + (c.danger ? ' danger-go' : '')} onClick={ok} disabled={busy} autoFocus>
+            {busy ? '처리 중…' : c.okText || '확인'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /* ───────────────────── 출근 모달 ───────────────────── */
 export function EntryModal() {
@@ -163,101 +225,6 @@ export function EntryModal() {
   )
 }
 
-/* ───────────────────── 채팅 ───────────────────── */
-export function Chat() {
-  const joined = useStore((s) => s.joined)
-  const messages = useStore((s) => s.messages)
-  const me = useStore((s) => s.me)
-  const modal = useStore((s) => s.modal)
-  const [text, setText] = useState('')
-  const [open, setOpen] = useState(true)
-  const listRef = useRef()
-  const inputRef = useRef()
-  useEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
-  }, [messages, open])
-  useEffect(() => {
-    const k = (e) => {
-      if (e.key === 'Enter' && document.activeElement !== inputRef.current && joined && !useStore.getState().modal) {
-        const tag = document.activeElement?.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'SELECT') return
-        setOpen(true)
-        setTimeout(() => inputRef.current?.focus(), 0)
-        e.preventDefault()
-      }
-    }
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [joined])
-  if (!joined) return null
-  const send = (e) => {
-    e.preventDefault()
-    const t = text.trim()
-    if (!t) return
-    const id = uid()
-    const msg = { id: 'me' + id, from: me.id, mine: true, name: me.name, title: me.title, shirt: me.shirt, text: t, time: fmtTime(new Date()) }
-    const st = useStore.getState()
-    st.addMessage(msg)
-    st.setBubble(t)
-    sendChat({ ...msg, id })
-    setText('')
-  }
-  return (
-    <div className={'chat' + (open ? '' : ' closed') + (modal ? ' dim' : '')}>
-      <div className="chat-head" onClick={() => setOpen(!open)}>
-        <span>💬 사무실 채팅</span>
-        <span className="chat-sub">{open ? '접기 ▾' : '펼치기 ▴'}</span>
-      </div>
-      {open && (
-        <>
-          <div className="chat-list" ref={listRef}>
-            {messages.map((m) =>
-              m.system ? (
-                <div key={m.id} className={'sys' + (m.spin ? ' spin' : '')}>
-                  {m.text}
-                </div>
-              ) : m.mine ? (
-                <div key={m.id} className="msg mine">
-                  <span className="time">{m.time}</span>
-                  <div className="txt">{m.text}</div>
-                </div>
-              ) : (
-                <div key={m.id} className="msg">
-                  <div className="ava" style={{ background: m.shirt }}>
-                    {m.name[0]}
-                  </div>
-                  <div>
-                    <div className="who">
-                      {m.name} {m.title}
-                    </div>
-                    <div className="row">
-                      <div className="txt">{m.text}</div>
-                      <span className="time">{m.time}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-          <form className="chat-input" onSubmit={send}>
-            <input
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-              placeholder="메시지 입력 (Enter 전송)"
-              maxLength={80}
-            />
-            <button type="submit" disabled={!text.trim()}>
-              전송
-            </button>
-          </form>
-        </>
-      )}
-    </div>
-  )
-}
-
 /* ───────────────────── 상황별 액션 버튼 ───────────────────── */
 export function ActionPanel() {
   const joined = useStore((s) => s.joined)
@@ -285,7 +252,9 @@ export function ActionPanel() {
     const s = seats[sitting]
     groups.push(
       <div className="act-group" key="sit">
-        <div className="act-title">🪑 {s.name} {s.title} 자리</div>
+        <div className="act-title">
+          🪑 {s.name} {s.title} 자리
+        </div>
         {listBtn(s.name)}
         <button className="act b-stand" onClick={() => window.dispatchEvent(new Event('stand-request'))}>
           ⬆️ 일어나기
@@ -297,7 +266,9 @@ export function ActionPanel() {
       const s = seats[nearSeat]
       groups.push(
         <div className="act-group" key="seat">
-          <div className="act-title">{s.name} {s.title} 자리</div>
+          <div className="act-title">
+            {s.name} {s.title} 자리
+          </div>
           <button className="act b-sit" onClick={() => window.dispatchEvent(new CustomEvent('sit-request', { detail: { idx: nearSeat } }))}>
             🪑 자리에 앉기
           </button>
@@ -314,8 +285,7 @@ export function ActionPanel() {
       const act = (kind) => {
         const st = useStore.getState()
         st.doAction(kind)
-        const me = st.me
-        sysMsg(kind === 'coffee' ? `☕ ${me.name} ${me.title}님이 커피를 내렸어요.` : `🍪 ${me.name} ${me.title}님이 간식을 먹고 있어요.`)
+        sysMsg(kind === 'coffee' ? `☕ ${st.me.name} ${st.me.title}님이 커피를 내렸어요.` : `🍪 ${st.me.name} ${st.me.title}님이 간식을 먹고 있어요.`)
       }
       groups.push(
         <div className="act-group" key="pantry">
@@ -363,7 +333,7 @@ export function ActionPanel() {
 /* ───────────────────── 모달 공통 ───────────────────── */
 function Sheet({ children, onClose, wide, className = '' }) {
   useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose()
+    const k = (e) => e.key === 'Escape' && !useStore.getState().confirm && onClose()
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
@@ -382,32 +352,41 @@ function Sheet({ children, onClose, wide, className = '' }) {
 export function Modals() {
   const modal = useStore((s) => s.modal)
   const close = () => useStore.getState().set({ modal: null })
-  if (!modal) return null
+  if (!modal || modal === 'newRoom') return null
   if (modal === 'noteWrite') return <NoteWrite onClose={close} />
   if (modal === 'board') return <BoardView onClose={close} />
   if (modal === 'roulette') return <Roulette onClose={close} />
   if (modal === 'vote') return <VoteModal onClose={close} />
+  if (modal === 'archive') return <ArchiveModal onClose={close} />
   if (modal.note) return <NoteView note={modal.note} onClose={close} back={modal.back} />
   if (modal.deskWrite !== undefined) return <DeskWrite idx={modal.deskWrite} onClose={close} />
   if (modal.deskNote) return <DeskNoteView note={modal.deskNote} onClose={close} back={modal.back} />
   if (modal.deskList) return <DeskList name={modal.deskList} onClose={close} />
+  if (modal.archived) return <ArchivedView note={modal.archived} onClose={close} />
   return null
 }
 
+/* ───────────────────── 사내 자유 게시판 ───────────────────── */
 function NoteWrite({ onClose }) {
   const [color, setColor] = useState(NOTE_COLORS[0].c)
   const [text, setText] = useState('')
+  const [anon, setAnon] = useState(true) // 기본값: 익명
   const [busy, setBusy] = useState(false)
+  const me = useStore((s) => s.me)
   const submit = async (e) => {
     e.preventDefault()
     const t = text.trim()
     if (!t || busy) return
     setBusy(true)
-    const res = await addNote({ text: t, color })
-    const me = useStore.getState().me
-    sysMsg(`📝 ${me.name} ${me.title}님이 게시판에 메모를 붙였어요.`)
-    if (!res.shared && useStore.getState().netMode === 'firebase') sysMsg('⚠️ Firebase 저장에 실패해 이 브라우저에만 붙였어요. (보안 규칙을 확인해 주세요)')
-    onClose()
+    try {
+      await addNote({ text: t, color, anon })
+      sysMsg(anon ? '🕵️ 누군가 게시판에 익명 메모를 붙였어요.' : `📝 ${me.name} ${me.title}님이 게시판에 메모를 붙였어요.`)
+      onClose()
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 메모를 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+      setBusy(false)
+    }
   }
   return (
     <Sheet onClose={onClose}>
@@ -416,12 +395,18 @@ function NoteWrite({ onClose }) {
         <div className="note-preview" style={{ background: color }}>
           <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} maxLength={60} placeholder="예: 오늘 빨리 퇴근하고 싶어요 🙏" />
           <span className="cnt">{text.length}/60</span>
+          <span className="sign">- {anon ? '익명' : `${me.name} ${me.title}`}</span>
         </div>
         <div className="swatches big">
           {NOTE_COLORS.map((c) => (
             <button type="button" key={c.c} title={c.n} className={color === c.c ? 'on' : ''} style={{ background: c.c }} onClick={() => setColor(c.c)} />
           ))}
         </div>
+        <label className={'anon-check' + (anon ? ' on' : '')}>
+          <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
+          <span>🕵️ 익명으로 남기기</span>
+          <small>{anon ? '이름이 저장되지 않고 "익명"으로 표시돼요' : `"${me.name} ${me.title}" 실명으로 표시돼요`}</small>
+        </label>
         <button className="go" disabled={!text.trim() || busy}>
           {busy ? '붙이는 중…' : '📌 게시판에 붙이기'}
         </button>
@@ -445,9 +430,7 @@ function BoardView({ onClose }) {
           <button key={n.id} className="pi" style={{ background: n.color, transform: `rotate(${(n.tilt || 0) * -40}deg)` }} onClick={() => useStore.getState().set({ modal: { note: n, back: 'board' } })}>
             <span className="pin" />
             <span className="pt">{n.text}</span>
-            <span className="pa">
-              - {n.name} {n.title}
-            </span>
+            <span className="pa">- {noteAuthor(n)}</span>
           </button>
         ))}
       </div>
@@ -461,8 +444,7 @@ function BoardView({ onClose }) {
 }
 
 function NoteView({ note, onClose, back }) {
-  const me = useStore((s) => s.me)
-  const mine = me && note.authorId === me.id
+  const mine = note.authorId && note.authorId === myUid()
   const date = note.at ? new Date(note.at).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
   return (
     <Sheet onClose={onClose} className="note-sheet">
@@ -470,7 +452,7 @@ function NoteView({ note, onClose, back }) {
         <span className="pin" />
         <p>{note.text}</p>
         <div className="by">
-          - {note.name} {note.title}
+          - {noteAuthor(note)}
           <small>{date}</small>
         </div>
       </div>
@@ -504,6 +486,11 @@ const DESK_COLORS = [
   { c: '#a5d8ff', n: '하늘' },
 ]
 const seatByName = (name) => seats.find((x) => x.name === name)
+const seatLabel = (name) => {
+  const s = seatByName(name)
+  return s ? `${s.name} ${s.title}` : name
+}
+const fullDate = (t) => (t ? new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '')
 
 function DeskWrite({ idx, onClose }) {
   const seat = seats[idx]
@@ -516,10 +503,15 @@ function DeskWrite({ idx, onClose }) {
     const t = text.trim()
     if (!t || busy) return
     setBusy(true)
-    const res = await deskStore.add({ seat: seat.name, text: t.slice(0, 50), color })
-    sysMsg(`💌 ${me.name} ${me.title}님이 ${seat.name} ${seat.title}님 책상에 쪽지를 남겼어요.`)
-    if (!res.shared && useStore.getState().netMode === 'firebase') sysMsg('⚠️ Firebase 저장에 실패해 이 브라우저에만 붙였어요. (보안 규칙을 확인해 주세요)')
-    onClose()
+    try {
+      await addDeskNote({ seat: seat.name, text: t, color })
+      sysMsg(`💌 ${me.name} ${me.title}님이 ${seat.name} ${seat.title}님 책상에 쪽지를 남겼어요.`)
+      onClose()
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 쪽지를 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+      setBusy(false)
+    }
   }
   return (
     <Sheet onClose={onClose}>
@@ -551,22 +543,28 @@ function DeskWrite({ idx, onClose }) {
 
 function DeskNoteView({ note, onClose, back }) {
   const me = useStore((s) => s.me)
-  const seat = seatByName(note.seat)
-  const date = note.at ? new Date(note.at).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+  const [busy, setBusy] = useState(false)
   const done = async () => {
-    await deskStore.remove(note)
-    sysMsg(`✅ ${me.name} ${me.title}님이 ${seat ? seat.name + ' ' + seat.title + '님 책상의 ' : ''}쪽지를 확인했어요.`)
-    useStore.getState().set({ modal: back || null })
+    setBusy(true)
+    try {
+      await archiveDeskNote(note)
+      sysMsg(`✅ ${me.name} ${me.title}님이 ${seatLabel(note.seat)}님 책상의 쪽지를 확인했어요. (📬 보관함으로 이동)`)
+      useStore.getState().set({ modal: back || null })
+    } catch (e) {
+      console.warn(e)
+      sysMsg('⚠️ 쪽지를 보관함으로 옮기지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+      setBusy(false)
+    }
   }
   return (
     <Sheet onClose={onClose} className="note-sheet">
       <div className="note-big" style={{ background: note.color }}>
         <span className="pin tape" />
-        <div className="to">💌 To. {seat ? `${seat.name} ${seat.title}님` : note.seat}</div>
+        <div className="to">💌 To. {seatLabel(note.seat)}님</div>
         <p>{note.text}</p>
         <div className="by">
           - {note.name} {note.title}
-          <small>{date}</small>
+          <small>{fullDate(note.at)}</small>
         </div>
       </div>
       <div className="sheet-foot">
@@ -575,30 +573,31 @@ function DeskNoteView({ note, onClose, back }) {
             ← 목록으로
           </button>
         )}
-        <button className="go small ok" onClick={done}>
+        <button className="go small ok" onClick={done} disabled={busy}>
           ✅ 확인 완료 (떼어내기)
         </button>
       </div>
+      <p className="note-hint">떼어낸 쪽지는 상단의 📬 쪽지 보관함에서 다시 볼 수 있어요.</p>
     </Sheet>
   )
 }
 
 function DeskList({ name, onClose }) {
-  const notes = useStore((s) => s.deskNotes.filter((n) => n.seat === name))
-  const seat = seatByName(name)
+  const all = useStore((s) => s.deskNotes)
+  const notes = all.filter((n) => n.seat === name)
   useEffect(() => {
     if (!notes.length) onClose()
   }, [notes.length])
   return (
     <Sheet onClose={onClose}>
-      <h2>📬 {seat ? `${seat.name} ${seat.title}님` : name} 책상의 쪽지</h2>
-      <p className="sub">{notes.length}개 · 눌러서 읽고 확인 완료하면 떼어져요</p>
+      <h2>📬 {seatLabel(name)}님 책상의 쪽지</h2>
+      <p className="sub">{notes.length}개 · 눌러서 읽고 확인 완료하면 보관함으로 이동해요</p>
       <div className="desk-list">
         {notes.map((n) => (
           <button key={n.id} className="dl-item" style={{ background: n.color }} onClick={() => useStore.getState().set({ modal: { deskNote: n, back: { deskList: name } } })}>
             <span className="dl-text">{n.text}</span>
             <span className="dl-by">
-              - {n.name} {n.title} · {fmtTime(new Date(n.at))}
+              - {n.name} {n.title} · {fullDate(n.at)}
             </span>
           </button>
         ))}
@@ -607,42 +606,208 @@ function DeskList({ name, onClose }) {
   )
 }
 
+/* ───────────────────── 📬 쪽지 보관함 ───────────────────── */
+function ArchiveModal({ onClose }) {
+  const archive = useStore((s) => s.deskArchive)
+  const me = useStore((s) => s.me)
+  const mySeat = seatByName(me.name) ? me.name : null
+  const [filter, setFilter] = useState(mySeat || 'all')
+  const counts = useMemo(() => {
+    const c = {}
+    for (const n of archive) c[n.seat] = (c[n.seat] || 0) + 1
+    return c
+  }, [archive])
+  const seatsWithNotes = seats.filter((s) => counts[s.name])
+  const shown = filter === 'all' ? archive : archive.filter((n) => n.seat === filter)
+  return (
+    <Sheet onClose={onClose} wide>
+      <h2>📬 쪽지 보관함</h2>
+      <p className="sub">확인 완료한 책상 쪽지를 자리별로 다시 볼 수 있어요 · 총 {archive.length}개</p>
+      <div className="arch-tabs">
+        <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>
+          전체 <b>{archive.length}</b>
+        </button>
+        {mySeat && !counts[mySeat] && (
+          <button className={filter === mySeat ? 'on' : ''} onClick={() => setFilter(mySeat)}>
+            ⭐ 내 자리 <b>0</b>
+          </button>
+        )}
+        {seatsWithNotes.map((s) => (
+          <button key={s.name} className={filter === s.name ? 'on' : ''} onClick={() => setFilter(s.name)}>
+            {s.name === mySeat && '⭐ '}
+            {s.name} {s.title} <b>{counts[s.name]}</b>
+          </button>
+        ))}
+      </div>
+      <div className="arch-list">
+        {shown.length === 0 && <div className="room-empty">보관된 쪽지가 없어요.</div>}
+        {shown.map((n) => (
+          <div key={n.id} className="arch-item">
+            <span className="arch-color" style={{ background: n.color }} />
+            <button className="arch-main" onClick={() => useStore.getState().set({ modal: { archived: n } })}>
+              <div className="arch-top">
+                <b>To. {seatLabel(n.seat)}</b>
+                <span>
+                  보낸 사람 {n.name} {n.title}
+                </span>
+              </div>
+              <div className="arch-text">{n.text}</div>
+              <div className="arch-meta">
+                받은 시간 {fullDate(n.at)}
+                {n.checkedAt ? ` · 확인 ${fullDate(n.checkedAt)}${n.checkedBy ? ` (${n.checkedBy})` : ''}` : ''}
+              </div>
+            </button>
+            <button
+              className="arch-del"
+              title="영구 삭제"
+              onClick={() =>
+                askConfirm({
+                  title: '🗑️ 이 쪽지를 영구 삭제할까요?',
+                  body: `"${n.text}" — 삭제하면 되돌릴 수 없어요.`,
+                  okText: '영구 삭제',
+                  danger: true,
+                  onOk: () => deleteArchived(n),
+                })
+              }
+            >
+              🗑️
+            </button>
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  )
+}
+
+function ArchivedView({ note, onClose }) {
+  return (
+    <Sheet onClose={onClose} className="note-sheet">
+      <div className="note-big archived" style={{ background: note.color }}>
+        <span className="pin tape" />
+        <div className="to">💌 To. {seatLabel(note.seat)}님</div>
+        <p>{note.text}</p>
+        <div className="by">
+          - {note.name} {note.title}
+          <small>받은 시간 {fullDate(note.at)}</small>
+          {note.checkedAt > 0 && (
+            <small>
+              ✅ 확인 {fullDate(note.checkedAt)} {note.checkedBy && `· ${note.checkedBy}`}
+            </small>
+          )}
+        </div>
+      </div>
+      <div className="sheet-foot">
+        <button className="ghost" onClick={() => useStore.getState().set({ modal: 'archive' })}>
+          ← 보관함으로
+        </button>
+        <button
+          className="ghost danger"
+          onClick={() =>
+            askConfirm({
+              title: '🗑️ 이 쪽지를 영구 삭제할까요?',
+              body: '삭제하면 되돌릴 수 없어요.',
+              okText: '영구 삭제',
+              danger: true,
+              onOk: async () => {
+                await deleteArchived(note)
+                useStore.getState().set({ modal: 'archive' })
+              },
+            })
+          }
+        >
+          🗑️ 영구 삭제
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
 /* ───────────────────── 간식 투표 ───────────────────── */
 function VoteModal({ onClose }) {
-  const st = useStore()
+  const myVote = useStore((s) => s.myVote)
+  const sharedVotes = useStore((s) => s.sharedVotes)
+  const snackOptions = useStore((s) => s.snackOptions)
+  const voteMode = useStore((s) => s.voteMode)
+  const me = useStore((s) => s.me)
+  const st = { sharedVotes, snackOptions }
+  const list = snackList(st)
   const counts = tally(st)
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
-  const ranked = [...SNACKS].sort((a, b) => counts[b.k] - counts[a.k])
+  const ranked = [...list].sort((a, b) => counts[b.k] - counts[a.k])
   const max = Math.max(1, ...Object.values(counts))
   const [busy, setBusy] = useState(false)
+  const [newOpt, setNewOpt] = useState('')
   const week = voteWeek()
   const mon = new Date(week + 'T00:00:00Z')
   const nextMon = new Date(mon.getTime() + 7 * 86400000)
   const label = `${nextMon.getUTCMonth() + 1}/${nextMon.getUTCDate()}`
   const vote = async (k) => {
-    if (busy || st.myVote === k) return
+    if (busy || myVote === k) return
     setBusy(true)
-    const first = !st.myVote
-    await castVote(k)
-    if (first) sysMsg(`🗳️ ${st.me.name} ${st.me.title}님이 간식 투표에 참여했어요!`)
+    const first = !myVote
+    try {
+      await castVote(k)
+      if (first) sysMsg(`🗳️ ${me.name} ${me.title}님이 간식 투표에 참여했어요!`)
+    } catch (e) {
+      console.warn(e)
+      sysMsg('⚠️ 투표를 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
     setBusy(false)
+  }
+  const add = async (e) => {
+    e.preventDefault()
+    const t = newOpt.trim()
+    if (!t) return
+    if (list.some((x) => x.l.replace(/\s/g, '') === t.replace(/\s/g, ''))) return sysMsg(`ℹ️ '${t}'은(는) 이미 후보에 있어요.`)
+    setNewOpt('')
+    try {
+      await addSnackOption(t)
+      sysMsg(`🍬 ${me.name} ${me.title}님이 간식 후보 '${t}'을(를) 추가했어요.`)
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 후보를 추가하지 못했어요.')
+    }
   }
   const medal = ['🥇', '🥈', '🥉']
   return (
     <Sheet onClose={onClose} wide className="vote-sheet">
       <h2>🗳️ 오늘의 간식 투표함</h2>
-      <p className="sub">
-        다음 주({label}~) 탕비실에 채울 간식을 골라 주세요 · 1인 1표, 언제든 바꿀 수 있어요
-      </p>
+      <p className="sub">다음 주({label}~) 탕비실에 채울 간식을 골라 주세요 · 1인 1표, 언제든 바꿀 수 있어요</p>
       <div className="vote-grid">
-        {SNACKS.map((x) => (
-          <button key={x.k} className={'vote-opt' + (st.myVote === x.k ? ' on' : '')} onClick={() => vote(x.k)} disabled={busy}>
-            <span className="ve">{x.e}</span>
-            <span className="vl">{x.l}</span>
-            {st.myVote === x.k && <span className="vmine">내 선택 ✓</span>}
-          </button>
+        {list.map((x) => (
+          <div key={x.k} className={'vote-opt' + (myVote === x.k ? ' on' : '')}>
+            <button className="vote-hit" onClick={() => vote(x.k)} disabled={busy}>
+              <span className="ve">{x.e}</span>
+              <span className="vl">{x.l}</span>
+              {x.custom && <span className="vby">{x.custom.by} 추가</span>}
+            </button>
+            {myVote === x.k && <span className="vmine">내 선택 ✓</span>}
+            {x.custom && (
+              <button
+                className="vote-x"
+                title="후보 삭제"
+                onClick={() =>
+                  askConfirm({
+                    title: `'${x.l}' 후보를 삭제할까요?`,
+                    body: counts[x.k] ? `이 후보에 들어간 ${counts[x.k]}표도 집계에서 빠져요.` : '',
+                    okText: '삭제',
+                    danger: true,
+                    onOk: () => removeSnackOption(x.custom),
+                  })
+                }
+              >
+                ×
+              </button>
+            )}
+          </div>
         ))}
       </div>
+      <form className="add-row" onSubmit={add}>
+        <input value={newOpt} onChange={(e) => setNewOpt(e.target.value)} maxLength={20} placeholder="먹고 싶은 간식 이름 (예: 아이스크림, 젤리)" />
+        <button className="add-btn" disabled={!newOpt.trim()}>
+          + 원하는 간식 후보 추가하기
+        </button>
+      </form>
       <div className="vote-board">
         <div className="vb-head">
           <b>📊 실시간 순위</b>
@@ -652,7 +817,7 @@ function VoteModal({ onClose }) {
           const c = counts[x.k]
           const pct = total ? Math.round((c / total) * 100) : 0
           return (
-            <div className={'vb-row' + (st.myVote === x.k ? ' mine' : '')} key={x.k}>
+            <div className={'vb-row' + (myVote === x.k ? ' mine' : '')} key={x.k}>
               <span className="vb-rank">{c > 0 && i < 3 ? medal[i] : i + 1}</span>
               <span className="vb-name">
                 {x.e} {x.l}
@@ -667,18 +832,23 @@ function VoteModal({ onClose }) {
           )
         })}
       </div>
-      <p className="vote-note">{st.voteMode === 'shared' ? '✓ 투표 결과는 Firebase에 저장되어 모든 동료에게 공유돼요 (매주 월요일 새 회차)' : 'ℹ️ 로컬 모드: 이 브라우저의 탭끼리만 집계돼요 (Firebase 설정 시 전체 공유)'}</p>
+      <p className="vote-note">{voteMode === 'shared' ? '✓ 투표와 후보는 Firebase에 저장되어 모든 동료에게 공유돼요 (투표는 매주 월요일 새 회차)' : 'ℹ️ 로컬 모드: 이 브라우저의 탭끼리만 공유돼요 (Firebase 설정 시 전체 공유)'}</p>
     </Sheet>
   )
 }
 
 /* ───────────────────── 점심 룰렛 ───────────────────── */
 function Roulette({ onClose }) {
-  const n = RESTAURANTS.length
+  const custom = useStore((s) => s.customRestaurants)
+  const me = useStore((s) => s.me)
+  const names = useMemo(() => [...RESTAURANTS, ...custom.map((c) => c.name)], [custom])
+  const n = names.length
   const seg = 360 / n
   const [rot, setRot] = useState(0)
   const [spinning, setSpinning] = useState(false)
-  const [result, setResult] = useState(null)
+  const [result, setResult] = useState(null) // 당첨 식당 이름
+  const [editOpen, setEditOpen] = useState(false)
+  const [newName, setNewName] = useState('')
   const timer = useRef()
   useEffect(() => () => clearTimeout(timer.current), [])
   const spin = () => {
@@ -688,32 +858,50 @@ function Roulette({ onClose }) {
     const target = 360 - (idx + 0.5) * seg + jitter
     const base = rot - (rot % 360)
     const next = base + 360 * 7 + target
+    const picked = names[idx]
     setResult(null)
     setSpinning(true)
     setRot(next)
     spinWheel3D()
     timer.current = setTimeout(() => {
       setSpinning(false)
-      setResult(idx)
+      setResult(picked)
       const st = useStore.getState()
-      const me = st.me
       const id = uid()
-      st.addMessage({ id: 'spin' + id, system: true, spin: true, text: `🎰 ${me.name} ${me.title}님의 점심 룰렛 결과 → 🍽️ ${RESTAURANTS[idx]}`, time: fmtTime(new Date()) })
-      st.set({ lastSpin: { id, idx, at: Date.now() } })
-      st.setBubble(`오늘 점심은 ${RESTAURANTS[idx]}! 🍽️`)
+      st.addMessage({ id: 'spin' + id, system: true, spin: true, text: `🎰 ${me.name} ${me.title}님의 점심 룰렛 결과 → 🍽️ ${picked}`, time: fmtTime(new Date()), at: Date.now() })
+      st.set({ lastSpin: { id, idx, name: picked, at: Date.now() } })
+      st.setBubble(`오늘 점심은 ${picked}! 🍽️`)
     }, 4700)
   }
+  const add = async (e) => {
+    e.preventDefault()
+    const t = newName.trim()
+    if (!t) return
+    if (names.some((x) => x.replace(/\s/g, '') === t.replace(/\s/g, ''))) return sysMsg(`ℹ️ '${t}'은(는) 이미 룰렛에 있어요.`)
+    setNewName('')
+    try {
+      await addRestaurant(t)
+      sysMsg(`🍴 ${me.name} ${me.title}님이 점심 룰렛에 '${t}'을(를) 추가했어요.`)
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 식당을 추가하지 못했어요.')
+    }
+  }
   const R = 200
-  const slices = RESTAURANTS.map((name, i) => {
+  const fontSize = n > 50 ? 8.5 : n > 40 ? 9.5 : 10.5
+  const maxChars = n > 50 ? 9 : 11
+  const slices = names.map((name, i) => {
     const a0 = ((i * seg - 90) * Math.PI) / 180
     const a1 = (((i + 1) * seg - 90) * Math.PI) / 180
     const d = `M${R},${R} L${R + R * Math.cos(a0)},${R + R * Math.sin(a0)} A${R},${R} 0 0 1 ${R + R * Math.cos(a1)},${R + R * Math.sin(a1)} Z`
     const mid = i * seg + seg / 2
-    const label = name.length > 11 ? name.slice(0, 10) + '…' : name
+    const label = name.length > maxChars ? name.slice(0, maxChars - 1) + '…' : name
+    const isCustom = i >= RESTAURANTS.length
     return (
       <g key={i}>
         <path d={d} fill={WHEEL_COLORS[i % WHEEL_COLORS.length]} stroke="#fff" strokeWidth="1.5" />
-        <text x={R} y={R} transform={`rotate(${mid - 90} ${R} ${R}) translate(${R - 12} 0)`} textAnchor="end" dominantBaseline="middle" className="wl">
+        <text x={R} y={R} transform={`rotate(${mid - 90} ${R} ${R}) translate(${R - 12} 0)`} textAnchor="end" dominantBaseline="middle" className="wl" style={{ fontSize }}>
+          {isCustom ? '★' : ''}
           {label}
         </text>
       </g>
@@ -722,7 +910,9 @@ function Roulette({ onClose }) {
   return (
     <Sheet onClose={onClose} wide className="roulette-sheet">
       <h2>🎰 오늘 뭐 먹지? 점심 룰렛</h2>
-      <p className="sub">동편마을 · 인덕원 맛집 {n}곳 중 하나가 당첨돼요</p>
+      <p className="sub">
+        동편마을 · 인덕원 맛집 {n}곳 중 하나가 당첨돼요{custom.length > 0 && ` (기본 ${RESTAURANTS.length} + ★추가 ${custom.length})`}
+      </p>
       <div className="wheel-wrap">
         <div className="wheel-pointer" />
         <svg viewBox={`0 0 ${R * 2} ${R * 2}`} className="wheel-svg" style={{ transform: `rotate(${rot}deg)`, transition: spinning ? 'transform 4.6s cubic-bezier(0.12, 0.7, 0.08, 1)' : 'none' }}>
@@ -739,7 +929,7 @@ function Roulette({ onClose }) {
             <span className="confetti">🎉</span>
             <div>
               <small>오늘의 점심 당첨!</small>
-              <b>{RESTAURANTS[result]}</b>
+              <b>{result}</b>
               <em>✓ 사무실 채팅에 공유했어요</em>
             </div>
           </div>
@@ -748,10 +938,55 @@ function Roulette({ onClose }) {
         )}
       </div>
       <div className="sheet-foot">
+        <button className="ghost" onClick={() => setEditOpen(!editOpen)}>
+          🍴 식당 추가/편집 {editOpen ? '▴' : '▾'}
+        </button>
         <button className="go small" onClick={spin} disabled={spinning}>
           {result !== null ? '🔄 다시 돌리기' : '🎰 룰렛 돌리기'}
         </button>
       </div>
+      {editOpen && (
+        <div className="rest-edit">
+          <form className="add-row" onSubmit={add}>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={30} placeholder="새 식당 이름 (예: 인덕원 칼국수)" disabled={spinning} />
+            <button className="add-btn" disabled={!newName.trim() || spinning}>
+              + 추가
+            </button>
+          </form>
+          <div className="rest-title">★ 직원이 추가한 식당 {custom.length}곳</div>
+          <div className="chips">
+            {custom.length === 0 && <span className="chip-empty">아직 추가된 식당이 없어요</span>}
+            {custom.map((c) => (
+              <span key={c.id} className="chip custom" title={`${c.by} 추가`}>
+                ★ {c.name}
+                <button
+                  disabled={spinning}
+                  onClick={() =>
+                    askConfirm({
+                      title: `'${c.name}'을(를) 룰렛에서 뺄까요?`,
+                      okText: '삭제',
+                      danger: true,
+                      onOk: () => removeRestaurant(c),
+                    })
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <details className="rest-default">
+            <summary>기본 맛집 {RESTAURANTS.length}곳 보기</summary>
+            <div className="chips">
+              {RESTAURANTS.map((r) => (
+                <span key={r} className="chip">
+                  {r}
+                </span>
+              ))}
+            </div>
+          </details>
+        </div>
+      )}
     </Sheet>
   )
 }
@@ -766,6 +1001,7 @@ export function HUD() {
   const mood = useStore((s) => s.mood)
   const status = useStore((s) => s.status)
   const netMode = useStore((s) => s.netMode)
+  const archiveCount = useStore((s) => s.deskArchive.length)
   const [open, setOpen] = useState(false)
   const [clock, setClock] = useState(fmtTime(new Date()))
   useEffect(() => {
@@ -774,9 +1010,7 @@ export function HUD() {
   }, [])
   if (!joined) return null
   const online = 1 + Object.values(remotes).filter((r) => r.name).length
-  const pickMood = (m) => {
-    useStore.getState().set({ mood: m })
-  }
+  const pickMood = (m) => useStore.getState().set({ mood: m })
   const pickStatus = (s) => {
     useStore.getState().set({ status: s })
     sysMsg(`${s.e} ${me.name} ${me.title}님 상태: ${s.l}`)
@@ -836,25 +1070,30 @@ export function HUD() {
             </button>
           </div>
         )}
-        <button className="me-card" onClick={() => setOpen(!open)}>
-          <div className="ava" style={{ background: me.shirt }}>
-            {me.name[0]}
-            <span className="ava-mood">{mood.e}</span>
-          </div>
-          <div className="me-txt">
-            <div>
-              <b>{me.name}</b> {me.title}
+        <div className="me-row">
+          <button className="archive-btn" onClick={() => useStore.getState().set({ modal: 'archive' })}>
+            📬 쪽지 보관함{archiveCount > 0 && <b>{archiveCount}</b>}
+          </button>
+          <button className="me-card" onClick={() => setOpen(!open)}>
+            <div className="ava" style={{ background: me.shirt }}>
+              {me.name[0]}
+              <span className="ava-mood">{mood.e}</span>
             </div>
-            <div className="status">
-              {status.e} {status.l}
+            <div className="me-txt">
+              <div>
+                <b>{me.name}</b> {me.title}
+              </div>
+              <div className="status">
+                {status.e} {status.l}
+              </div>
             </div>
-          </div>
-          <div className="me-edit">
-            오늘의 상태/기분
-            <br />
-            설정 {open ? '▾' : '▴'}
-          </div>
-        </button>
+            <div className="me-edit">
+              오늘의 상태/기분
+              <br />
+              설정 {open ? '▾' : '▴'}
+            </div>
+          </button>
+        </div>
       </div>
     </>
   )
@@ -865,6 +1104,7 @@ const LUNCH = {
   pre: { time: '11:25', icon: '⏰', title: '점심시간 5분 전입니다!', body: '오늘 뭐 먹을지 점심 룰렛을 돌려볼까요?', tone: 'pre' },
   lunch: { time: '11:30', icon: '🍚', title: '점심시간입니다!', body: '맛있게 식사하세요! 오후도 힘내요 💪', tone: 'lunch' },
 }
+const fired = new Set()
 function fireLunch(kind) {
   const a = LUNCH[kind]
   useStore.getState().set({ toast: { ...a, kind, key: uid() } })
@@ -935,8 +1175,8 @@ export function LunchAlerts() {
     </div>
   )
 }
-const fired = new Set()
 
+/* ───────────────────── 조명 / 음악 컨트롤 ───────────────────── */
 function AmbienceControls() {
   const lightMode = useStore((s) => s.lightMode)
   const timeMode = useStore((s) => s.timeMode)
@@ -974,7 +1214,13 @@ function AmbienceControls() {
     <div className="amb">
       <button className={'tool music' + (musicOn ? ' on' : '')} onClick={toggleMusic}>
         {musicOn ? '🎵 배경음악 ON' : '🔇 배경음악 OFF'}
-        {musicOn && <span className="eq"><i /><i /><i /></span>}
+        {musicOn && (
+          <span className="eq">
+            <i />
+            <i />
+            <i />
+          </span>
+        )}
       </button>
       <div className="bell-tests">
         <button onClick={() => fireLunch('pre')}>🔔 11:25 알림 테스트</button>
