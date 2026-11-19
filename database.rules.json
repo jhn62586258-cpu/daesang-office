@@ -1,0 +1,44 @@
+{
+  "rules": {
+    "presence": {
+      ".read": "auth != null",
+      "$sid": {
+        ".write": "auth != null && $sid.beginsWith(auth.uid)",
+        ".validate": "newData.hasChildren(['n', 'x', 'z']) && newData.child('n').isString() && newData.child('n').val().length <= 10"
+      }
+    },
+    "chat": {
+      ".read": "auth != null",
+      ".indexOn": ["at"],
+      "$msgId": {
+        ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid",
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('at').isNumber()"
+      }
+    },
+    "board_notes": {
+      ".read": "auth != null",
+      ".indexOn": ["at"],
+      "$noteId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 60 && newData.child('at').isNumber()"
+      }
+    },
+    "desk_notes": {
+      ".read": "auth != null",
+      ".indexOn": ["at"],
+      "$noteId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
+      }
+    },
+    "snack_votes": {
+      ".read": "auth != null",
+      "$week": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.child('choice').val().matches(/^(choco|pretzel|zero|capsule|ramen)$/)"
+        }
+      }
+    }
+  }
+}
