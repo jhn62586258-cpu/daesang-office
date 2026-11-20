@@ -43,6 +43,8 @@ export const furniture = [
   // 탕비실
   { type: 'counter', x: 27.0, z: 9.3, w: 2.7, d: 0.55 },
   { type: 'fridge', x: 28.15, z: 8.1, w: 0.65, d: 0.65 },
+  // 🎄 크리스마스 트리 (렌더링은 XmasTree)
+  { type: 'xmasTree', x: 19.55, z: 6.8, w: 0.9, d: 0.9 },
   // 탕비실 옆 점심 룰렛 (렌더링은 Roulette3D)
   { type: 'roulette', x: 25.0, z: 9.26, w: 0.78, d: 0.45 },
 ]

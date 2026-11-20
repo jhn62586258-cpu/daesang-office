@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { walls, seats, roomLabels, W, D, WALL_H } from './layout'
-import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D } from './Extras'
+import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame } from './Extras'
+import { STORIES, todayStoryIndex } from './stories'
 import { lampMats, glowMat } from './Ambience'
 import { furniture } from './furniture'
 import { wallThickness } from './nav'
@@ -840,6 +841,10 @@ export default function Office() {
       <Board3D />
       <Roulette3D />
       <VoteBox3D />
+      {/* 🎄 설계실 오른쪽, 관리부로 가는 유리 파티션 옆 */}
+      <XmasTree x={19.55} z={6.8} />
+      {/* 🏛️ 탕비실 북쪽 벽 액자 */}
+      <StoryFrame x={26.55} z={7.765} story={STORIES[todayStoryIndex()]} />
     </group>
   )
 }

@@ -16,9 +16,12 @@ import {
   removeSnackOption,
   addRestaurant,
   removeRestaurant,
+  addStory,
+  removeStory,
 } from './notes'
+import { STORIES, todayStoryIndex } from './stories'
 import { myUid } from './db'
-import { startMusic, stopMusic, setRain, playChime } from './lofi'
+import { startMusic, stopMusic, playChime, currentSongName } from './music'
 import { kstNow, MODE_LABEL } from './Ambience'
 import { spinWheel3D } from './net'
 import { RESTAURANTS, WHEEL_COLORS } from './restaurants'
@@ -299,6 +302,9 @@ export function ActionPanel() {
           <button className="act b-vote" onClick={() => useStore.getState().set({ modal: 'vote' })}>
             🗳️ 간식 투표하기
           </button>
+          <button className="act b-story" onClick={() => useStore.getState().set({ modal: 'stories' })}>
+            🏛️ 오늘의 건축 이야기 보기
+          </button>
         </div>
       )
     }
@@ -358,6 +364,8 @@ export function Modals() {
   if (modal === 'roulette') return <Roulette onClose={close} />
   if (modal === 'vote') return <VoteModal onClose={close} />
   if (modal === 'archive') return <ArchiveModal onClose={close} />
+  if (modal === 'stretch') return <StretchModal onClose={close} />
+  if (modal === 'stories') return <StoriesModal onClose={close} />
   if (modal.note) return <NoteView note={modal.note} onClose={close} back={modal.back} />
   if (modal.deskWrite !== undefined) return <DeskWrite idx={modal.deskWrite} onClose={close} />
   if (modal.deskNote) return <DeskNoteView note={modal.deskNote} onClose={close} back={modal.back} />
@@ -1099,14 +1107,16 @@ export function HUD() {
   )
 }
 
-/* ───────────────────── 점심시간 알림 (KST 평일 11:25 / 11:30) ───────────────────── */
-const LUNCH = {
-  pre: { time: '11:25', icon: '⏰', title: '점심시간 5분 전입니다!', body: '오늘 뭐 먹을지 점심 룰렛을 돌려볼까요?', tone: 'pre' },
-  lunch: { time: '11:30', icon: '🍚', title: '점심시간입니다!', body: '맛있게 식사하세요! 오후도 힘내요 💪', tone: 'lunch' },
+/* ───────────────────── 시간 알림 (KST) ───────────────────── */
+// 점심: 평일 11:25 / 11:30 · 스트레칭: 매일 15:00
+const ALERTS = {
+  pre: { time: '11:25', weekdaysOnly: true, icon: '⏰', label: '점심 알림', title: '점심시간 5분 전입니다!', body: '오늘 뭐 먹을지 점심 룰렛을 돌려볼까요?', tone: 'pre', action: '🎰 점심 룰렛 바로가기', modal: 'roulette' },
+  lunch: { time: '11:30', weekdaysOnly: true, icon: '🍚', label: '점심 알림', title: '점심시간입니다!', body: '맛있게 식사하세요! 오후도 힘내요 💪', tone: 'lunch', action: '🎰 점심 룰렛 바로가기', modal: 'roulette' },
+  stretch: { time: '15:00', weekdaysOnly: false, icon: '🧘', label: '스트레칭 알림', title: '오후 3시! 굽은 허리와 피로한 눈을 풀어줄 시간이에요', body: '1분이면 충분해요. 함께 몸을 풀어 볼까요?', tone: 'stretch', action: '🧘 1분 스트레칭 시작', modal: 'stretch' },
 }
 const fired = new Set()
-function fireLunch(kind) {
-  const a = LUNCH[kind]
+function fireAlert(kind) {
+  const a = ALERTS[kind]
   useStore.getState().set({ toast: { ...a, kind, key: uid() } })
   playChime()
   sysMsg(`${a.icon} ${a.title} ${a.body}`)
@@ -1120,22 +1130,22 @@ export function LunchAlerts() {
     const check = () => {
       const k = kstNow()
       const dow = k.getUTCDay()
-      if (dow === 0 || dow === 6) return // 주말 제외
       const hm = `${String(k.getUTCHours()).padStart(2, '0')}:${String(k.getUTCMinutes()).padStart(2, '0')}`
       const day = k.toISOString().slice(0, 10)
-      for (const kind of ['pre', 'lunch']) {
-        if (hm !== LUNCH[kind].time) continue
-        const key = `archi-office-3d-lunch-${kind}`
+      for (const [kind, a] of Object.entries(ALERTS)) {
+        if (hm !== a.time) continue
+        if (a.weekdaysOnly && (dow === 0 || dow === 6)) continue // 주말 제외
+        const key = `archi-office-3d-alert-${kind}`
         let last = null
         try {
           last = localStorage.getItem(key)
         } catch {}
-        if (last === day || fired.has(kind + day)) continue
+        if (last === day || fired.has(kind + day)) continue // 하루 한 번
         fired.add(kind + day)
         try {
           localStorage.setItem(key, day)
         } catch {}
-        fireLunch(kind)
+        fireAlert(kind)
       }
     }
     check()
@@ -1153,7 +1163,9 @@ export function LunchAlerts() {
     <div className={'lunch-toast ' + toast.tone} key={toast.key} role="status">
       <div className="lt-icon">{toast.icon}</div>
       <div className="lt-body">
-        <div className="lt-time">KST {toast.time} · 점심 알림</div>
+        <div className="lt-time">
+          KST {toast.time} · {toast.label}
+        </div>
         <b>{toast.title}</b>
         <span>{toast.body}</span>
       </div>
@@ -1162,10 +1174,10 @@ export function LunchAlerts() {
           className="lt-go"
           onClick={() => {
             close()
-            useStore.getState().set({ modal: 'roulette' })
+            useStore.getState().set({ modal: toast.modal })
           }}
         >
-          🎰 점심 룰렛 바로가기
+          {toast.action}
         </button>
         <button className="lt-x" onClick={close} aria-label="닫기">
           ✕
@@ -1173,6 +1185,292 @@ export function LunchAlerts() {
       </div>
       <div className="lt-progress" />
     </div>
+  )
+}
+
+/* ───────────────────── 🧘 1분 스트레칭 & 눈 운동 ───────────────────── */
+const STEPS = [
+  { sec: 15, icon: '🦒', title: '거북목 펴기', text: '턱을 뒤로 당기고 고개를 천천히 왼쪽, 오른쪽으로 5초씩 지그시 눌러주세요.', anim: 'neck' },
+  { sec: 15, icon: '🙆‍♂️', title: '허리 펴고 기지개', text: '의자 등받이에서 등을 떼고 양손을 깍지 낀 채 천장을 향해 쭉 뻗어 허리를 펴주세요.', anim: 'reach' },
+  { sec: 20, icon: '👀', title: '안구 건조 예방 눈 운동', text: '고개는 고정하고, 초록색 동그라미가 ∞(무한대) 모양과 사각형 모서리를 따라 움직이는 걸 눈동자로만 따라가 보세요!', anim: 'eyes' },
+]
+const TOTAL = STEPS.reduce((a, b) => a + b.sec, 0)
+
+// 눈 운동 경로: 앞 10초 ∞, 뒤 10초 사각형 모서리 (모서리마다 잠깐 멈춤)
+function eyePoint(t, w, h) {
+  const cx = w / 2
+  const cy = h / 2
+  const ax = w * 0.4
+  const ay = h * 0.36
+  if (t < 10) {
+    const a = (t / 5) * Math.PI * 2 // 5초에 한 바퀴
+    return [cx + ax * Math.sin(a), cy + ay * Math.sin(a) * Math.cos(a) * 1.6]
+  }
+  const corners = [
+    [cx - ax, cy - ay],
+    [cx + ax, cy - ay],
+    [cx + ax, cy + ay],
+    [cx - ax, cy + ay],
+  ]
+  const u = ((t - 10) % 10) / 2.5 // 한 변에 2.5초
+  const i = Math.floor(u)
+  const f = u - i
+  const hold = 0.3 // 각 모서리에서 잠깐 멈춤
+  const e = f < hold ? 0 : (f - hold) / (1 - hold)
+  const k = e < 0.5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2
+  const [x0, y0] = corners[i % 4]
+  const [x1, y1] = corners[(i + 1) % 4]
+  return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k]
+}
+
+function EyeTrack({ elapsed }) {
+  const W = 360
+  const H = 190
+  const [x, y] = eyePoint(elapsed, W, H)
+  const trail = []
+  for (let k = 1; k <= 6; k++) trail.push(eyePoint(Math.max(0, elapsed - k * 0.07), W, H))
+  const inf = []
+  for (let i = 0; i <= 80; i++) {
+    const [px, py] = eyePoint((i / 80) * 5, W, H)
+    inf.push(`${px.toFixed(1)},${py.toFixed(1)}`)
+  }
+  const square = elapsed >= 10
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="eye-track">
+      {square ? (
+        <rect x={W / 2 - W * 0.4} y={H / 2 - H * 0.36} width={W * 0.8} height={H * 0.72} rx="6" className="guide" />
+      ) : (
+        <polyline points={inf.join(' ')} className="guide" />
+      )}
+      {trail.map(([tx, ty], i) => (
+        <circle key={i} cx={tx} cy={ty} r={14 - i * 1.6} fill="#51cf66" opacity={0.25 - i * 0.035} />
+      ))}
+      <circle cx={x} cy={y} r="15" fill="#2f9e44" />
+      <circle cx={x} cy={y} r="15" fill="none" stroke="#b2f2bb" strokeWidth="4" opacity="0.8" />
+      <text x={W / 2} y={H - 8} textAnchor="middle" className="eye-cap">
+        {square ? '□ 사각형 모서리 따라가기' : '∞ 무한대 따라가기'}
+      </text>
+    </svg>
+  )
+}
+
+function StretchModal({ onClose }) {
+  const [elapsed, setElapsed] = useState(0) // 전체 경과(초)
+  const [paused, setPaused] = useState(false)
+  const [done, setDone] = useState(false)
+  const last = useRef(performance.now())
+  useEffect(() => {
+    if (done) return
+    let raf
+    const loop = (now) => {
+      const dt = (now - last.current) / 1000
+      last.current = now
+      if (!paused) setElapsed((e) => Math.min(TOTAL, e + dt))
+      raf = requestAnimationFrame(loop)
+    }
+    last.current = performance.now()
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [paused, done])
+  useEffect(() => {
+    if (elapsed >= TOTAL && !done) {
+      setDone(true)
+      const st = useStore.getState()
+      st.refresh()
+      playChime()
+      sysMsg(`🧘 ${st.me.name} ${st.me.title}님이 1분 스트레칭을 완료했어요! 피로도 -20% ✨`)
+    }
+  }, [elapsed, done])
+  let idx = 0
+  let acc = 0
+  while (idx < STEPS.length - 1 && elapsed >= acc + STEPS[idx].sec) acc += STEPS[idx++].sec
+  const step = STEPS[idx]
+  const inStep = elapsed - acc
+  const left = Math.max(0, Math.ceil(step.sec - inStep))
+  const frac = Math.min(1, inStep / step.sec)
+  const skip = () => setElapsed(Math.min(TOTAL, acc + step.sec))
+  const restart = () => {
+    setElapsed(0)
+    setDone(false)
+    setPaused(false)
+  }
+  const R = 34
+  const C = 2 * Math.PI * R
+  return (
+    <Sheet onClose={onClose} wide className="stretch-sheet">
+      <h2>🧘 1분 오피스 스트레칭 & 눈 휴식</h2>
+      <div className="st-steps">
+        {STEPS.map((s, i) => (
+          <div key={i} className={'st-step' + (done || i < idx ? ' done' : i === idx ? ' now' : '')}>
+            <span>{done || i < idx ? '✓' : i + 1}</span>
+            {s.icon} {s.title} <small>{s.sec}초</small>
+          </div>
+        ))}
+      </div>
+      <div className="st-total">
+        <div style={{ width: `${(elapsed / TOTAL) * 100}%` }} />
+      </div>
+      {done ? (
+        <div className="st-done">
+          <div className="st-big">✨</div>
+          <b>스트레칭 완료! 피로도 -20% 감소!</b>
+          <p>개운해진 몸으로 남은 오후도 힘내요 💚</p>
+          <div className="sheet-foot center">
+            <button className="ghost" onClick={restart}>
+              🔄 한 번 더
+            </button>
+            <button className="go small" onClick={onClose}>
+              완료
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="st-body">
+            <div className="st-visual">
+              {step.anim === 'eyes' ? (
+                <EyeTrack elapsed={inStep} />
+              ) : (
+                <div className={'st-figure ' + step.anim + (paused ? ' paused' : '')}>
+                  <span>{step.icon}</span>
+                </div>
+              )}
+            </div>
+            <div className="st-info">
+              <div className="st-label">
+                {idx + 1}단계 · {step.sec}초
+              </div>
+              <h3>
+                {step.icon} {step.title}
+              </h3>
+              <p>{step.text}</p>
+              {step.anim === 'neck' && <div className="st-sub">{inStep < 7.5 ? '⬅️ 왼쪽으로 지그시…' : '➡️ 오른쪽으로 지그시…'}</div>}
+              {step.anim === 'reach' && <div className="st-sub">{Math.floor(inStep) % 4 < 2 ? '⬆️ 쭉~ 뻗고' : '😮‍💨 숨을 내쉬며 유지'}</div>}
+            </div>
+            <svg className="st-ring" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r={R} className="bg" />
+              <circle cx="40" cy="40" r={R} className="fg" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} />
+              <text x="40" y="46" textAnchor="middle">
+                {left}
+              </text>
+            </svg>
+          </div>
+          <div className="sheet-foot center">
+            <button className="ghost" onClick={() => setPaused(!paused)}>
+              {paused ? '▶ 계속하기' : '⏸ 일시정지'}
+            </button>
+            <button className="ghost" onClick={skip}>
+              ⏭ 다음 단계
+            </button>
+          </div>
+        </>
+      )}
+    </Sheet>
+  )
+}
+
+/* ───────────────────── 🏛️ 오늘의 건축 이야기 ───────────────────── */
+function StoriesModal({ onClose }) {
+  const shared = useStore((s) => s.archiStories)
+  const me = useStore((s) => s.me)
+  const today = todayStoryIndex()
+  const [i, setI] = useState(today)
+  const [title, setTitle] = useState('')
+  const [text, setText] = useState('')
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const story = STORIES[i]
+  const uidMe = myUid()
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!text.trim() || busy) return
+    if (url.trim() && !/^https?:\/\//.test(url.trim())) return sysMsg('ℹ️ 링크는 http:// 또는 https:// 로 시작해야 해요.')
+    setBusy(true)
+    try {
+      await addStory({ title, text, url })
+      sysMsg(`🏛️ ${me.name} ${me.title}님이 건축 이야기를 공유했어요${title.trim() ? `: '${title.trim()}'` : '.'}`)
+      setTitle('')
+      setText('')
+      setUrl('')
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 이야기를 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
+    setBusy(false)
+  }
+  return (
+    <Sheet onClose={onClose} wide className="story-sheet">
+      <h2>🏛️ 오늘의 건축 이야기</h2>
+      <p className="sub">매일 하나씩 추천되는 건축가의 말과 건축 상식 · 커피 한 잔과 함께 ☕</p>
+      <div className="story-card">
+        <div className="sc-top">
+          <span className="sc-tag">{story.tag}</span>
+          {i === today && <span className="sc-today">오늘의 추천</span>}
+          <span className="sc-n">
+            {i + 1} / {STORIES.length}
+          </span>
+        </div>
+        <div className="sc-who">{story.who}</div>
+        <blockquote>{story.quote}</blockquote>
+        <p>{story.body}</p>
+        <div className="sc-nav">
+          <button className="ghost" onClick={() => setI((i + STORIES.length - 1) % STORIES.length)}>
+            ◀ 이전
+          </button>
+          {i !== today && (
+            <button className="ghost" onClick={() => setI(today)}>
+              오늘의 이야기
+            </button>
+          )}
+          <button className="ghost" onClick={() => setI((i + 1) % STORIES.length)}>
+            다음 ▶
+          </button>
+        </div>
+      </div>
+
+      <div className="shared-head">
+        <b>📚 직원들이 공유한 건축 이야기</b>
+        <span>{shared.length}개</span>
+      </div>
+      <div className="shared-list">
+        {shared.length === 0 && <div className="room-empty">아직 공유된 이야기가 없어요. 첫 이야기를 올려 보세요!</div>}
+        {shared.map((x) => (
+          <div key={x.id} className="shared-item">
+            {x.title && <b>{x.title}</b>}
+            <p>{x.text}</p>
+            {x.url && (
+              <a href={x.url} target="_blank" rel="noopener noreferrer">
+                🔗 {x.url.replace(/^https?:\/\//, '').slice(0, 48)}
+                {x.url.length > 56 ? '…' : ''}
+              </a>
+            )}
+            <div className="si-meta">
+              {x.name} {x.rank} · {fullDate(x.at)}
+              {x.authorId === uidMe && (
+                <button
+                  onClick={() =>
+                    askConfirm({ title: '이 이야기를 삭제할까요?', okText: '삭제', danger: true, onOk: () => removeStory(x) })
+                  }
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <form className="story-form" onSubmit={submit}>
+        <div className="sf-title">+ 나도 건축 이야기/기사 공유하기</div>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} placeholder="제목 (선택) 예: 루이스 칸의 빛과 침묵" />
+        <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder="함께 보고 싶은 건축 이야기, 명언, 기사 요약을 적어 주세요 (300자)" />
+        <div className="sf-row">
+          <input value={url} onChange={(e) => setUrl(e.target.value)} maxLength={300} placeholder="기사·참고 링크 (선택) https://…" />
+          <button className="add-btn" disabled={!text.trim() || busy}>
+            {busy ? '올리는 중…' : '공유하기'}
+          </button>
+        </div>
+      </form>
+    </Sheet>
   )
 }
 
@@ -1186,16 +1484,13 @@ function AmbienceControls() {
     const t = setInterval(() => setKst(kstNow()), 15000)
     return () => clearInterval(t)
   }, [])
-  useEffect(() => {
-    if (musicOn) setRain(timeMode === 'night')
-  }, [timeMode, musicOn])
   const toggleMusic = async () => {
     if (musicOn) {
       stopMusic()
       useStore.getState().set({ musicOn: false })
     } else {
       try {
-        await startMusic(useStore.getState().timeMode === 'night')
+        await startMusic()
         useStore.getState().set({ musicOn: true })
       } catch {
         sysMsg('🔇 이 브라우저에서는 소리를 재생할 수 없어요.')
@@ -1222,14 +1517,18 @@ function AmbienceControls() {
           </span>
         )}
       </button>
+      <button className="tool stretch-btn" onClick={() => useStore.getState().set({ modal: 'stretch' })}>
+        🧘 1분 스트레칭
+      </button>
       <div className="bell-tests">
-        <button onClick={() => fireLunch('pre')}>🔔 11:25 알림 테스트</button>
-        <button onClick={() => fireLunch('lunch')}>🔔 11:30 알림 테스트</button>
+        <button onClick={() => fireAlert('pre')}>🔔 11:25 테스트</button>
+        <button onClick={() => fireAlert('lunch')}>🔔 11:30 테스트</button>
+        <button onClick={() => fireAlert('stretch')}>🔔 15:00 테스트</button>
       </div>
       <div className="amb-box">
         <div className="amb-now">
           KST {hh}:{mm} · {MODE_LABEL[timeMode]} 모드{lightMode !== 'auto' && <em> (미리보기)</em>}
-          {musicOn && <span>{timeMode === 'night' ? ' · 🌧️ 로파이+빗소리' : ' · 🎧 로파이'}</span>}
+          {musicOn && <span> · 🎄 캐롤 오르골</span>}
         </div>
         <div className="amb-seg">
           {opts.map(([k, l]) => (

@@ -49,6 +49,7 @@ git push -u origin main
 | `/snack_options/{id}` | 직원이 추가한 간식 후보 |
 | `/snack_votes/{주차}/{uid}` | 간식 투표 (1인 1표, 매주 월요일 새 회차) |
 | `/custom_restaurants/{id}` | 직원이 추가한 점심 룰렛 식당 |
+| `/archi_stories/{id}` | 직원이 공유한 건축 이야기·기사 (작성자만 삭제) |
 
 > 새 버전으로 업데이트할 때는 **`database.rules.json`을 Firebase 콘솔 → Realtime Database → 규칙에 다시 붙여넣고 [게시]** 해야 새 기능이 저장됩니다.
 
@@ -68,9 +69,16 @@ git push -u origin main
    ├─ main.jsx / App.jsx / store.js
    ├─ layout.js / furniture.js / nav.js     ← 평면도 · 가구 · 길찾기
    ├─ Office.jsx / Extras.jsx / Character.jsx / Player.jsx
-   ├─ Ambience.jsx / lofi.js                ← KST 조명 · 로파이 음악
+   ├─ Ambience.jsx / music.js               ← KST 조명 · 크리스마스 캐롤 오르골 (Web Audio)
+   ├─ stories.js                            ← 오늘의 건축 이야기 기본 10편
    ├─ UI.jsx / styles.css / textures.js / restaurants.js
 ```
+
+## 시간 알림 (KST)
+| 시각 | 알림 |
+|---|---|
+| 평일 11:25 / 11:30 | 점심 알림 + 룰렛 바로가기 |
+| 매일 15:00 | 🧘 1분 스트레칭 & 눈 운동 (상단 [🧘 1분 스트레칭] 버튼으로 언제든 실행) |
 
 ## 운영 팁
 - 전체 채팅은 채팅창의 [🗑️ 대화 비우기]로 정리할 수 있어요.

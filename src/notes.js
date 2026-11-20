@@ -5,6 +5,7 @@
 //   /snack_options/{id}           직원이 추가한 간식 후보
 //   /snack_votes/{주차}/{uid}      간식 투표 (1인 1표, 매주 월요일 새 회차)
 //   /custom_restaurants/{id}      직원이 추가한 점심 룰렛 식당
+//   /archi_stories/{id}           직원이 공유한 건축 이야기·기사
 import { useStore, uid } from './store'
 import { dbOn, dbSet, dbRemove, myUid, isFirebase, dbReady } from './db'
 
@@ -55,6 +56,18 @@ export async function initData() {
     for (const [k, d] of Object.entries(v || {})) if (d && typeof d.choice === 'string') votes[k] = d.choice.slice(0, 40)
     useStore.getState().set({ sharedVotes: votes, myVote: votes[myUid()] || null })
   })
+  dbOn(
+    'archi_stories',
+    (v) =>
+      useStore.getState().set({
+        archiStories: toList(v, (k, d) =>
+          d && typeof d === 'object'
+            ? { id: k, title: s(d.title, 40), text: s(d.text, 300), url: /^https?:\/\//.test(d.url || '') ? s(d.url, 300) : '', name: s(d.name, 10), rank: s(d.rank, 6), at: n0(d.at), authorId: s(d.authorId, 64) }
+            : null
+        ),
+      }),
+    { last: 100 }
+  )
   dbOn('custom_restaurants', (v) =>
     useStore.getState().set({
       customRestaurants: toList(v, (k, d) => (d && typeof d === 'object' ? { id: k, name: s(d.name, 30), by: s(d.by, 20), at: n0(d.at) } : null)).reverse(),
@@ -164,3 +177,12 @@ export async function addRestaurant(name) {
   await dbSet(`custom_restaurants/${id}`, { name: t, by: `${me.name} ${me.title}`, at: Date.now() })
 }
 export const removeRestaurant = (r) => dbRemove(`custom_restaurants/${r.id}`)
+
+/* ───────── 🏛️ 건축 이야기 공유 ───────── */
+export async function addStory({ title, text, url }) {
+  const me = useStore.getState().me
+  const id = 'a' + Date.now().toString(36) + uid()
+  const link = /^https?:\/\//.test(url.trim()) ? url.trim().slice(0, 300) : ''
+  await dbSet(`archi_stories/${id}`, { title: title.trim().slice(0, 40), text: text.trim().slice(0, 300), url: link, name: me.name, rank: me.title, at: Date.now(), authorId: myUid() })
+}
+export const removeStory = (st) => dbRemove(`archi_stories/${st.id}`)

@@ -7,17 +7,17 @@
         ".validate": "newData.hasChildren(['n', 'x', 'z']) && newData.child('n').isString() && newData.child('n').val().length <= 10"
       }
     },
-
     "chat": {
       ".read": "auth != null",
       ".write": "auth != null && !newData.exists()",
-      ".indexOn": ["at"],
+      ".indexOn": [
+        "at"
+      ],
       "$msgId": {
         ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('uid').val() === auth.uid))",
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('at').isNumber()"
       }
     },
-
     "group_chats": {
       "$roomId": {
         ".read": "auth != null && data.child('members').child(auth.uid).exists()",
@@ -26,14 +26,15 @@
           ".validate": "newData.child('name').isString() && newData.child('name').val().length <= 20"
         },
         "messages": {
-          ".indexOn": ["at"],
+          ".indexOn": [
+            "at"
+          ],
           "$msgId": {
             ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 200 && newData.child('at').isNumber()"
           }
         }
       }
     },
-
     "user_rooms": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
@@ -43,43 +44,46 @@
         }
       }
     },
-
     "board_notes": {
       ".read": "auth != null",
-      ".indexOn": ["at"],
+      ".indexOn": [
+        "at"
+      ],
       "$noteId": {
         ".write": "auth != null",
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 60 && newData.child('at').isNumber()"
       }
     },
-
     "desk_notes": {
       ".read": "auth != null",
-      ".indexOn": ["at"],
+      ".indexOn": [
+        "at"
+      ],
       "$noteId": {
         ".write": "auth != null",
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
       }
     },
-
     "desk_notes_archive": {
       ".read": "auth != null",
-      ".indexOn": ["at"],
+      ".indexOn": [
+        "at"
+      ],
       "$noteId": {
         ".write": "auth != null",
         ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
       }
     },
-
     "snack_options": {
       ".read": "auth != null",
-      ".indexOn": ["at"],
+      ".indexOn": [
+        "at"
+      ],
       "$optId": {
         ".write": "auth != null",
         ".validate": "newData.child('label').isString() && newData.child('label').val().length >= 1 && newData.child('label').val().length <= 20"
       }
     },
-
     "snack_votes": {
       ".read": "auth != null",
       "$week": {
@@ -89,13 +93,24 @@
         }
       }
     },
-
     "custom_restaurants": {
       ".read": "auth != null",
-      ".indexOn": ["at"],
+      ".indexOn": [
+        "at"
+      ],
       "$restId": {
         ".write": "auth != null",
         ".validate": "newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30"
+      }
+    },
+    "archi_stories": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "at"
+      ],
+      "$storyId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('authorId').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('authorId').val() === auth.uid))",
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 300 && newData.child('title').isString() && newData.child('title').val().length <= 40 && newData.child('url').isString() && newData.child('url').val().length <= 300 && (newData.child('url').val() === '' || newData.child('url').val().matches(/^https?:\\/\\//)) && newData.child('at').isNumber()"
       }
     }
   }

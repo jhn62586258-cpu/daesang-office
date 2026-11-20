@@ -62,6 +62,7 @@ export const useStore = create((set, get) => ({
   deskArchive: [], // 쪽지 보관함
   snackOptions: [], // 추가 간식 후보
   customRestaurants: [], // 추가 식당
+  archiStories: [], // 직원이 공유한 건축 이야기
   confirm: null, // 확인창 { title, body, okText, onOk }
 
   join: (me) => set({ me, joined: true }),
@@ -82,6 +83,8 @@ export const useStore = create((set, get) => ({
     }),
   clearHolding: () => set({ holding: null }),
   clearEmote: () => set({ emote: null }),
+  // 스트레칭 완료 → 머리 위 '개운함 ✨'
+  refresh: () => set({ emote: { kind: 'fresh', key: Math.random(), until: Date.now() + 4000 } }),
   upsertRemote: (r) => set((s) => ({ remotes: { ...s.remotes, [r.id]: { ...s.remotes[r.id], ...r, seen: Date.now() } } })),
   removeRemote: (id) =>
     set((s) => {

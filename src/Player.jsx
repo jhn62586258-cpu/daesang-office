@@ -31,7 +31,15 @@ export function HeadOverlay({ name, title, bubble, emote, mine, mood, status }) 
             {bubble.text}
           </div>
         )}
-        {emote && (
+        {emote && emote.kind === 'fresh' && (
+          <div className="emote fresh" key={emote.key}>
+            <span className="e1">😌</span>
+            <span className="e2">✨</span>
+            <span className="e3">💚</span>
+            <div className="fresh-label">개운함 ✨</div>
+          </div>
+        )}
+        {emote && emote.kind !== 'fresh' && (
           <div className="emote" key={emote.key}>
             <span className="e1">{emote.kind === 'coffee' ? '☕' : '🍪'}</span>
             <span className="e2">💖</span>
@@ -160,7 +168,7 @@ export function Player() {
   }, [bubble])
   useEffect(() => {
     if (!emote) return
-    const t = setTimeout(() => useStore.getState().clearEmote(), 3200)
+    const t = setTimeout(() => useStore.getState().clearEmote(), Math.max(1000, emote.until - Date.now()))
     return () => clearTimeout(t)
   }, [emote])
   useEffect(() => {

@@ -499,3 +499,195 @@ export function VoteBox3D() {
     </group>
   )
 }
+
+/* ───────── 🎄 크리스마스 트리 ───────── */
+const TREE_BULB_COLORS = ['#ffd43b', '#ff6b6b', '#74c0fc', '#69db7c', '#f783ac']
+const treeBulbMats = TREE_BULB_COLORS.map((c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.6, roughness: 0.3 }))
+const starMat = new THREE.MeshStandardMaterial({ color: '#ffd43b', emissive: '#ffb703', emissiveIntensity: 0.8, metalness: 0.4, roughness: 0.3 })
+
+function starGeometry() {
+  const sh = new THREE.Shape()
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? 0.17 : 0.075
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2
+    const x = Math.cos(a) * r
+    const y = Math.sin(a) * r
+    i === 0 ? sh.moveTo(x, y) : sh.lineTo(x, y)
+  }
+  sh.closePath()
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2 })
+  g.center()
+  return g
+}
+
+export function XmasTree({ x, z }) {
+  const timeMode = useStore((s) => s.timeMode)
+  const star = useRef()
+  const light = useRef()
+  const starGeo = useMemo(() => starGeometry(), [])
+  // 3단 원뿔 위의 오너먼트 / 전구 위치 (항상 같은 배치)
+  const { ornaments, bulbs } = useMemo(() => {
+    let seed = 11
+    const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const tiers = [
+      { y0: 0.55, h: 0.95, rad: 0.62 },
+      { y0: 1.1, h: 0.8, rad: 0.48 },
+      { y0: 1.55, h: 0.7, rad: 0.33 },
+    ]
+    const orn = []
+    const bl = []
+    const onCone = (t, u, a) => {
+      // u: 0(아래)~1(위)
+      const y = t.y0 + u * t.h
+      const rad = t.rad * (1 - u) + 0.02
+      return [Math.cos(a) * rad, y, Math.sin(a) * rad]
+    }
+    tiers.forEach((t, ti) => {
+      for (let i = 0; i < 9 - ti * 2; i++) orn.push({ p: onCone(t, 0.12 + r() * 0.5, r() * Math.PI * 2), c: ['#e03131', '#f8f9fa', '#ffd43b', '#1971c2', '#c2255c'][Math.floor(r() * 5)], s: 0.045 + r() * 0.025 })
+    })
+    // 나선형 전구 줄
+    for (let i = 0; i < 46; i++) {
+      const k = i / 46
+      const ti = k < 0.45 ? 0 : k < 0.8 ? 1 : 2
+      const t = tiers[ti]
+      const local = ti === 0 ? k / 0.45 : ti === 1 ? (k - 0.45) / 0.35 : (k - 0.8) / 0.2
+      bl.push({ p: onCone(t, 0.05 + local * 0.8, k * Math.PI * 2 * 5.5), m: i % TREE_BULB_COLORS.length })
+    }
+    return { ornaments: orn, bulbs: bl }
+  }, [])
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    const base = timeMode === 'night' ? 2.2 : timeMode === 'sunset' ? 1.3 : 0.55
+    treeBulbMats.forEach((m, i) => (m.emissiveIntensity = base * (0.55 + 0.45 * Math.sin(t * 2.2 + i * 1.3))))
+    starMat.emissiveIntensity = base * 0.9 + Math.sin(t * 3) * 0.25
+    if (star.current) star.current.rotation.y = Math.sin(t * 0.8) * 0.5
+    if (light.current) light.current.intensity = timeMode === 'night' ? 2.6 + Math.sin(t * 2) * 0.3 : timeMode === 'sunset' ? 1.2 : 0
+  })
+  return (
+    <group position={[x, 0, z]}>
+      {/* 화분 + 트리 스커트 */}
+      <mesh position={[0, 0.17, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.24, 0.2, 0.34, 20]} />
+        <meshStandardMaterial color="#b02a37" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.345, 0]}>
+        <cylinderGeometry args={[0.25, 0.25, 0.03, 20]} />
+        <meshStandardMaterial color="#ffd43b" metalness={0.5} roughness={0.3} />
+      </mesh>
+      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[0.62, 32]} />
+        <meshStandardMaterial color="#f1f3f5" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.45, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.09, 0.25, 10]} />
+        <meshStandardMaterial color="#6b4423" />
+      </mesh>
+      {/* 3단 잎 */}
+      {[
+        [0.55, 0.95, 0.66, '#2b8a3e'],
+        [1.1, 0.8, 0.52, '#2f9e44'],
+        [1.55, 0.7, 0.37, '#37b24d'],
+      ].map(([y0, h, rad, c], i) => (
+        <mesh key={i} position={[0, y0 + h / 2, 0]} castShadow>
+          <coneGeometry args={[rad, h, 18]} />
+          <meshStandardMaterial color={c} roughness={0.85} flatShading />
+        </mesh>
+      ))}
+      {/* 눈 덮인 끝자락 */}
+      {[
+        [0.58, 0.64],
+        [1.13, 0.5],
+        [1.58, 0.35],
+      ].map(([y, rad], i) => (
+        <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[rad, 0.025, 6, 24]} />
+          <meshStandardMaterial color="#ffffff" roughness={1} />
+        </mesh>
+      ))}
+      {ornaments.map((o, i) => (
+        <mesh key={'o' + i} position={o.p} castShadow>
+          <sphereGeometry args={[o.s, 12, 12]} />
+          <meshStandardMaterial color={o.c} metalness={0.6} roughness={0.25} />
+        </mesh>
+      ))}
+      {bulbs.map((b, i) => (
+        <mesh key={'b' + i} position={b.p} material={treeBulbMats[b.m]}>
+          <sphereGeometry args={[0.022, 8, 8]} />
+        </mesh>
+      ))}
+      <mesh ref={star} position={[0, 2.37, 0]} geometry={starGeo} material={starMat} />
+      {/* 선물 상자 */}
+      {[
+        [0.42, 0.12, 0.25, 0.22, '#e03131', '#ffd43b'],
+        [-0.38, 0.1, 0.3, 0.18, '#1971c2', '#ffffff'],
+        [0.12, 0.09, -0.45, 0.16, '#ae3ec9', '#ffd43b'],
+      ].map(([gx, hy, gz, sz, c, rib], i) => (
+        <group key={i} position={[gx, hy, gz]} rotation={[0, i * 0.6, 0]}>
+          <mesh castShadow>
+            <boxGeometry args={[sz, hy * 2, sz]} />
+            <meshStandardMaterial color={c} roughness={0.5} />
+          </mesh>
+          <mesh>
+            <boxGeometry args={[sz + 0.005, hy * 2 + 0.005, 0.035]} />
+            <meshStandardMaterial color={rib} />
+          </mesh>
+          <mesh>
+            <boxGeometry args={[0.035, hy * 2 + 0.005, sz + 0.005]} />
+            <meshStandardMaterial color={rib} />
+          </mesh>
+        </group>
+      ))}
+      <pointLight ref={light} position={[0, 1.4, 0.6]} intensity={0} distance={4.5} decay={1.6} color="#ffd8a8" />
+    </group>
+  )
+}
+
+/* ───────── 🏛️ 오늘의 건축 이야기 액자 (탕비실 벽) ───────── */
+export function StoryFrame({ x, z, story }) {
+  const map = useMemo(
+    () =>
+      makeTex(640, 470, (g) => {
+        g.fillStyle = '#fbf6ec'
+        g.fillRect(0, 0, 640, 470)
+        g.fillStyle = '#2f3e46'
+        g.fillRect(0, 0, 640, 92)
+        g.fillStyle = '#ffd43b'
+        g.font = `800 46px ${FONT}`
+        g.textBaseline = 'middle'
+        g.fillText('🏛️ 오늘의 건축 이야기', 30, 48)
+        g.fillStyle = '#8a6d3b'
+        g.font = `700 30px ${FONT}`
+        g.textBaseline = 'top'
+        g.fillText(`${story.who} · ${story.tag}`, 30, 118)
+        g.fillStyle = '#2b2a28'
+        g.font = `800 38px ${FONT}`
+        wrapText(g, story.quote, 580, 4).forEach((l, i) => g.fillText(l, 30, 170 + i * 52))
+        g.fillStyle = '#9a9184'
+        g.font = `600 24px ${FONT}`
+        g.fillText('가까이 와서 [이야기 보기]를 눌러 보세요', 30, 420)
+      }),
+    [story]
+  )
+  useEffect(() => () => map.dispose(), [map])
+  const open = (e) => {
+    e.stopPropagation()
+    if (useStore.getState().joined) useStore.getState().set({ modal: 'stories' })
+  }
+  return (
+    <group position={[x, 1.55, z]}>
+      <mesh castShadow>
+        <boxGeometry args={[0.98, 0.76, 0.05]} />
+        <meshStandardMaterial color="#8a5a35" roughness={0.55} />
+      </mesh>
+      <mesh
+        position={[0, 0, 0.027]}
+        onClick={open}
+        onPointerOver={() => (document.body.style.cursor = 'pointer')}
+        onPointerOut={() => (document.body.style.cursor = '')}
+      >
+        <planeGeometry args={[0.86, 0.632]} />
+        <meshStandardMaterial map={map} roughness={0.8} emissive="#ffffff" emissiveMap={map} emissiveIntensity={0.12} />
+      </mesh>
+    </group>
+  )
+}

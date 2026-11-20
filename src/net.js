@@ -135,7 +135,7 @@ function applyPeer(id, pr) {
     moving: !!pr.m,
     sitting: !!pr.si,
     holding: pr.ho === 'coffee' || pr.ho === 'cookie' ? pr.ho : null,
-    emote: pr.em && typeof pr.em === 'object' ? { kind: pr.em.k === 'coffee' ? 'coffee' : 'snack', until: num(pr.em.u), key: num(pr.em.u) } : null,
+    emote: pr.em && typeof pr.em === 'object' ? { kind: ['coffee', 'snack', 'fresh'].includes(pr.em.k) ? pr.em.k : 'snack', until: num(pr.em.u), key: num(pr.em.u) } : null,
     mood: str(pr.mo, 8),
     status: str(pr.st, 8),
   })
