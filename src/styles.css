@@ -641,3 +641,80 @@ kbd {
 .sf-row input { flex: 1; min-width: 0; }
 .act-group { flex-wrap: wrap; justify-content: center; max-width: max(300px, min(600px, calc(100vw - 820px))); }
 @media (max-width: 1100px) { .act-group { max-width: calc(100vw - 40px); } .actions { bottom: auto; top: 64px; } }
+
+/* ════════ v5: 연말 데코 · 커피 타임 · D-Day · 모형 전시대 ════════ */
+.tool-row { display: flex; gap: 6px; }
+.tool.acc-btn { background: linear-gradient(135deg, #fff5f5, #ffe3e3); color: #c92a2a; display: flex; align-items: center; gap: 6px; }
+.tool.acc-btn small { font-size: 11px; font-weight: 700; color: #6d655a; background: rgba(255,255,255,.8); padding: 1px 7px; border-radius: 999px; }
+.tool.acc-btn.on { background: linear-gradient(135deg, #e03131, #c92a2a); color: #fff; }
+.tool.acc-btn.on small { color: #c92a2a; }
+.b-tree { background: linear-gradient(135deg, #2f9e44, #2b8a3e); box-shadow: 0 4px 0 #1e6b2f; }
+.b-dday { background: #212529; color: #ffb703; box-shadow: 0 4px 0 #000; }
+.b-models { background: #c9b28a; color: #3d2f12; box-shadow: 0 4px 0 #a08a5f; }
+
+/* 커피 알림 */
+.coffee-toasts { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 85; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+.coffee-toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 14px; border-radius: 999px;
+  background: linear-gradient(135deg, #fff4e6, #ffe8cc); border: 2px solid #f0a868; box-shadow: 0 10px 28px rgba(111,78,55,.25);
+  animation: toastIn .45s cubic-bezier(.2,1.4,.4,1), fadeout .6s ease-in 6.4s forwards; font-size: 13.5px; color: #4a2f1b;
+}
+.ct-cup { font-size: 22px; animation: ring 1.4s ease-in-out 2; }
+.coffee-toast button { border: 0; background: #6f4e37; color: #fff; font-weight: 800; font-size: 12px; padding: 7px 12px; border-radius: 999px; white-space: nowrap; }
+
+/* 소원 카드 */
+.wish-sheet { width: min(680px, 100%); }
+.wish-form { display: flex; flex-direction: column; gap: 10px; }
+.wish-card-preview { position: relative; border-radius: 10px; padding: 16px 16px 22px 40px; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+.wish-card-preview input { width: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: 17px; font-weight: 800; color: #2d2a26; }
+.wc-hole { position: absolute; left: 14px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 2px #c9a227; }
+.wc-count { position: absolute; right: 12px; bottom: 5px; font-size: 11px; color: rgba(0,0,0,.4); }
+.wish-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tree-go { background: linear-gradient(135deg, #2f9e44, #2b8a3e) !important; color: #fff !important; box-shadow: 0 6px 16px rgba(47,158,68,.35) !important; }
+.wish-wall {
+  margin-top: 14px; padding: 16px; border-radius: 16px; max-height: 44vh; overflow-y: auto;
+  background: radial-gradient(circle at 20% 10%, rgba(255,255,255,.08), transparent 40%), linear-gradient(160deg, #1b4332, #143226);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-content: start;
+}
+.wish-wall .room-empty { grid-column: 1/-1; color: #d3f9d8; }
+.wish-card { position: relative; border-radius: 8px; padding: 12px 12px 10px 30px; box-shadow: 0 6px 14px rgba(0,0,0,.3); }
+.wish-card .wc-hole { left: 10px; top: 18px; margin-top: 0; }
+.wish-card p { margin: 0 0 6px; font-size: 14px; font-weight: 800; color: #2d2a26; line-height: 1.45; word-break: break-all; }
+.wc-by { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: rgba(45,42,38,.7); font-weight: 700; }
+.wc-by button { margin-left: auto; border: 0; background: rgba(0,0,0,.08); border-radius: 999px; font-size: 10.5px; padding: 2px 8px; color: #c92a2a; font-weight: 800; }
+
+/* D-Day */
+.dday-list { display: flex; flex-direction: column; gap: 8px; }
+.dday-item { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #ece5d9; border-radius: 14px; padding: 9px 10px; }
+.dd-badge { min-width: 76px; text-align: center; font-weight: 900; font-size: 17px; padding: 8px 6px; border-radius: 11px; background: #111; font-family: 'SF Mono', Menlo, Consolas, monospace; letter-spacing: .02em; }
+.dday-item.hot .dd-badge { color: #ff4d4d; text-shadow: 0 0 8px rgba(255,77,77,.7); }
+.dday-item.warm .dd-badge { color: #ffb703; text-shadow: 0 0 8px rgba(255,183,3,.6); }
+.dday-item.cool .dd-badge { color: #69db7c; text-shadow: 0 0 8px rgba(105,219,124,.6); }
+.dday-item.past .dd-badge { color: #868e96; }
+.dd-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dd-body b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-body span { font-size: 11.5px; color: #8a8174; }
+.dday-item .ghost { padding: 7px 10px; }
+.dday-form, .model-form { margin-top: 14px; background: #f8f4ec; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.dday-form input, .model-form input, .model-form textarea { font: inherit; font-size: 14px; padding: 9px 11px; border-radius: 11px; border: 1.5px solid #e2dacd; outline: none; background: #fff; min-width: 0; }
+.model-form textarea { min-height: 80px; resize: vertical; }
+.date-in { flex: none !important; width: 160px; }
+.dd-preview { font-size: 12.5px; color: #6d655a; }
+.dday-form .sheet-foot, .model-form .sheet-foot { margin-top: 2px; }
+
+/* 프로젝트 모형 */
+.model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; max-height: 50vh; overflow-y: auto; }
+.model-grid .room-empty { grid-column: 1/-1; }
+.model-card { background: #fff; border: 1px solid #ece5d9; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 3px 10px rgba(0,0,0,.05); }
+.mc-icon { width: 40px; height: 40px; border-radius: 12px; background: #f3e6cf; display: grid; place-items: center; font-size: 22px; }
+.model-card b { font-size: 15px; margin-top: 4px; }
+.model-card p { margin: 0; font-size: 13px; line-height: 1.5; color: #4b4740; white-space: pre-wrap; word-break: break-all; }
+.model-card a { font-size: 12.5px; color: #1c7ed6; font-weight: 800; text-decoration: none; }
+.mc-meta { font-size: 11px; color: #9a9184; margin-top: auto; padding-top: 4px; }
+.mc-actions { display: flex; gap: 6px; }
+.mc-actions .ghost { padding: 6px 10px; font-size: 12px; }
+/* 상황별 버튼: 채팅창(왼쪽)과 프로필(오른쪽) 사이 공간 안에서 줄바꿈 */
+.actions { left: 396px; right: 380px; transform: none; flex-wrap: wrap; justify-content: center; align-items: flex-end; animation: riseUp .3s ease-out; }
+@keyframes riseUp { from { transform: translateY(20px); opacity: 0; } }
+.act-group { max-width: none; }
+@media (max-width: 1100px) { .actions { left: 10px; right: 10px; top: 64px; bottom: auto; } }

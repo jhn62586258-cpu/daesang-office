@@ -1,7 +1,13 @@
 // 고정 가구 배치 (렌더링 + 충돌 판정 공용)
+
+// 상호작용 위치
+export const TREE = { x: 27.65, z: 6.55 } // 🎄 크리스마스 트리
+export const COFFEE = { x: 27.15, z: 8.75 } // ☕ 탕비실 커피머신 앞
+export const MODELS = { x: 15.45, z: 6.5 } // 📐 공용 회의 테이블 위 모형 전시
+export const DDAY = { x: 21.75, z: 0.16 } // 📅 관리부 북쪽 창가 전광판
 // 모든 항목: x,z = 중심, w = x폭, d = z깊이
 export const furniture = [
-  // 조대호 사장님실
+  // 조대호 대표님실
   { type: 'meetingTable', x: 2.0, z: 1.35, w: 1.9, d: 0.95, chairs: 4 },
   { type: 'bookshelf', x: 0.28, z: 2.3, w: 0.42, d: 2.6, h: 2.0 },
   { type: 'plant', x: 4.3, z: 0.45, w: 0.5, d: 0.5 },
@@ -43,8 +49,8 @@ export const furniture = [
   // 탕비실
   { type: 'counter', x: 27.0, z: 9.3, w: 2.7, d: 0.55 },
   { type: 'fridge', x: 28.15, z: 8.1, w: 0.65, d: 0.65 },
-  // 🎄 크리스마스 트리 (렌더링은 XmasTree)
-  { type: 'xmasTree', x: 19.55, z: 6.8, w: 0.9, d: 0.9 },
+  // 🎄 크리스마스 트리 — 다목적실 초록 소파 옆, 탕비실 앞 (렌더링은 XmasTree)
+  { type: 'xmasTree', x: 27.65, z: 6.55, w: 0.9, d: 0.9 },
   // 탕비실 옆 점심 룰렛 (렌더링은 Roulette3D)
   { type: 'roulette', x: 25.0, z: 9.26, w: 0.78, d: 0.45 },
 ]

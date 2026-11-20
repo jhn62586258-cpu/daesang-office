@@ -112,6 +112,30 @@
         ".write": "auth != null && ((!data.exists() && newData.child('authorId').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('authorId').val() === auth.uid))",
         ".validate": "newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 300 && newData.child('title').isString() && newData.child('title').val().length <= 40 && newData.child('url').isString() && newData.child('url').val().length <= 300 && (newData.child('url').val() === '' || newData.child('url').val().matches(/^https?:\\/\\//)) && newData.child('at').isNumber()"
       }
+    },
+    "tree_wishes": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "at"
+      ],
+      "$wishId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('authorId').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('authorId').val() === auth.uid))",
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 100 && newData.child('at').isNumber()"
+      }
+    },
+    "project_dday": {
+      ".read": "auth != null",
+      "$projectId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 40 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+      }
+    },
+    "archi_models": {
+      ".read": "auth != null",
+      "$modelId": {
+        ".write": "auth != null",
+        ".validate": "newData.child('title').isString() && newData.child('title').val().length >= 1 && newData.child('title').val().length <= 40 && newData.child('desc').isString() && newData.child('desc').val().length <= 300 && newData.child('url').isString() && newData.child('url').val().length <= 300 && (newData.child('url').val() === '' || newData.child('url').val().matches(/^https?:\\/\\//))"
+      }
     }
   }
 }

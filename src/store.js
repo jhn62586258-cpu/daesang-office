@@ -63,6 +63,24 @@ export const useStore = create((set, get) => ({
   snackOptions: [], // 추가 간식 후보
   customRestaurants: [], // 추가 식당
   archiStories: [], // 직원이 공유한 건축 이야기
+  treeWishes: [], // 🎄 트리 소원 카드
+  ddays: [], // 📅 프로젝트 마감
+  archiModels: [], // 📐 진행 중인 프로젝트
+  accessory: (() => {
+    try {
+      const a = localStorage.getItem('archi-office-3d-accessory')
+      return a === 'santa' || a === 'rudolph' ? a : null
+    } catch {
+      return null
+    }
+  })(), // 🎅 null | 'santa' | 'rudolph'
+  holdUntil: 0, // 커피잔을 들고 있는 시간
+  lastBrew: null, // ☕ 커피 뽑기 알림 (presence로 전달) { id, at }
+  coffeeToasts: [], // 동료의 커피 알림 배너
+  nearTree: false,
+  nearCoffee: false,
+  nearDday: false,
+  nearModels: false,
   confirm: null, // 확인창 { title, body, okText, onOk }
 
   join: (me) => set({ me, joined: true }),
@@ -79,7 +97,26 @@ export const useStore = create((set, get) => ({
   doAction: (kind) =>
     set({
       holding: kind === 'coffee' ? 'coffee' : 'cookie',
+      holdUntil: Date.now() + (kind === 'coffee' ? 180000 : 25000),
       emote: { kind, key: Math.random(), until: Date.now() + 3200 },
+    }),
+  // ☕ 커피 한잔 뽑기: 3분간 김 나는 커피잔을 들고 다님 + 동료에게 알림
+  brewCoffee: () =>
+    set({
+      holding: 'coffee',
+      holdUntil: Date.now() + 180000,
+      emote: { kind: 'coffee', key: Math.random(), until: Date.now() + 3200 },
+      lastBrew: { id: Math.random().toString(36).slice(2, 10), at: Date.now() },
+    }),
+  returnCoffee: () => set({ holding: null, holdUntil: 0 }),
+  // 🎅 없음 → 산타 모자 → 루돌프 머리띠 → 없음
+  cycleAccessory: () =>
+    set((s) => {
+      const next = s.accessory === null ? 'santa' : s.accessory === 'santa' ? 'rudolph' : null
+      try {
+        localStorage.setItem('archi-office-3d-accessory', next || '')
+      } catch {}
+      return { accessory: next }
     }),
   clearHolding: () => set({ holding: null }),
   clearEmote: () => set({ emote: null }),

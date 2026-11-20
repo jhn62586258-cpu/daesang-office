@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { walls, seats, roomLabels, W, D, WALL_H } from './layout'
-import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame } from './Extras'
+import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame, Garlands, Wreath, Snow, DdayBoard } from './Extras'
+import { TREE, COFFEE, DDAY } from './furniture'
 import { STORIES, todayStoryIndex } from './stories'
 import { lampMats, glowMat } from './Ambience'
 import { furniture } from './furniture'
@@ -461,6 +462,95 @@ function Table({ x, z, w, d, h = 0.74, top = C.deskTop, leg = '#4a4f52' }) {
   )
 }
 
+// 📐 공용 회의 테이블 위 건축 매스 모형 3종 — 클릭하면 '진행 중인 프로젝트' 팝업
+function ModelDisplay({ x, z }) {
+  const count = useStore((s) => s.archiModels.length)
+  const label = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 640
+    c.height = 140
+    const g = c.getContext('2d')
+    g.fillStyle = 'rgba(255,253,248,0.95)'
+    g.beginPath()
+    g.roundRect(6, 6, 628, 128, 60)
+    g.fill()
+    g.strokeStyle = '#c9b28a'
+    g.lineWidth = 6
+    g.stroke()
+    g.fillStyle = '#2b2a28'
+    g.font = '800 54px "Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif'
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.fillText(`📐 진행 중인 프로젝트 ${count}`, 320, 74)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [count])
+  useEffect(() => () => label.dispose(), [label])
+  const open = (e) => {
+    e.stopPropagation()
+    if (useStore.getState().joined) useStore.getState().set({ modal: 'models' })
+  }
+  return (
+    <group>
+      <ArchModel x={x} z={z - 1.15} />
+      <WoodModel x={x} z={z} />
+      <TerraceModel x={x} z={z + 1.15} />
+      <sprite position={[x, 1.6, z]} scale={[1.55, 0.34, 1]}>
+        <spriteMaterial map={label} transparent />
+      </sprite>
+      {/* 클릭 영역 */}
+      <mesh
+        position={[x, 0.98, z]}
+        onClick={open}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={() => (document.body.style.cursor = '')}
+      >
+        <boxGeometry args={[0.9, 0.5, 3.3]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
+
+// 우드톤 중정형 주택 모형
+function WoodModel({ x, z }) {
+  return (
+    <group position={[x, 0.765, z]}>
+      <Box p={[0, 0.01, 0]} s={[0.66, 0.02, 0.56]} c="#e9dcc4" />
+      <Box p={[-0.2, 0.08, 0]} s={[0.16, 0.12, 0.42]} c="#c9a06a" />
+      <Box p={[0.2, 0.1, 0]} s={[0.16, 0.16, 0.42]} c="#b88a52" />
+      <Box p={[0, 0.07, -0.16]} s={[0.24, 0.1, 0.1]} c="#d4b07c" />
+      <Box p={[0.2, 0.2, 0.05]} s={[0.17, 0.03, 0.3]} c="#8a6238" />
+      {[[-0.02, 0.08], [0.05, 0.1]].map(([tx, tz], i) => (
+        <mesh key={i} position={[tx, 0.07, tz]} castShadow>
+          <sphereGeometry args={[0.035, 8, 8]} />
+          <meshStandardMaterial color="#7aa874" />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+// 흰색 계단식 테라스 매스 + 유리 박스
+function TerraceModel({ x, z }) {
+  return (
+    <group position={[x, 0.765, z]}>
+      <Box p={[0, 0.01, 0]} s={[0.66, 0.02, 0.56]} c="#d8cbb6" />
+      {[0, 1, 2, 3].map((i) => (
+        <Box key={i} p={[-0.08 + i * 0.05, 0.05 + i * 0.07, -0.05 + i * 0.03]} s={[0.42 - i * 0.08, 0.07, 0.36 - i * 0.07]} c="#fbfaf6" />
+      ))}
+      <mesh position={[0.2, 0.12, 0.15]}>
+        <boxGeometry args={[0.12, 0.22, 0.12]} />
+        <meshStandardMaterial color="#a5d8ff" transparent opacity={0.55} roughness={0.1} />
+      </mesh>
+    </group>
+  )
+}
+
 function ArchModel({ x, z }) {
   // 설계사무소 느낌의 화이트 건축 모형
   const blocks = [
@@ -619,13 +709,7 @@ function Furniture({ f }) {
               <Chair x={f.x + 0.85} z={f.z + o} rot={Math.PI / 2} color="#56707a" />
             </group>
           ))}
-          <ArchModel x={f.x} z={f.z - 0.6} />
-          <Box p={[f.x, 0.77, f.z + 0.7]} s={[0.84, 0.005, 0.6]} c="#f6f4ee" />
-          <Box p={[f.x + 0.05, 0.776, f.z + 0.72]} s={[0.5, 0.002, 0.35]} c="#9fc3d8" cast={false} />
-          <mesh position={[f.x - 0.25, 0.8, f.z + 1.3]} rotation={[0, 0, Math.PI / 2]} castShadow>
-            <cylinderGeometry args={[0.035, 0.035, 0.6, 10]} />
-            <meshStandardMaterial color="#f4f1e8" />
-          </mesh>
+          <ModelDisplay x={f.x} z={f.z} />
         </group>
       )
     case 'printer':
@@ -711,8 +795,20 @@ function PantryCounter({ f }) {
           <meshStandardMaterial color="#c9ced2" metalness={0.9} roughness={0.2} />
         </mesh>
       </group>
-      {/* 커피머신 */}
-      <group position={[0.15, 0.9, 0.02]}>
+      {/* 커피머신 — 클릭하면 앞으로 걸어감 */}
+      <group
+        position={[0.15, 0.9, 0.02]}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!useStore.getState().joined) return
+          window.dispatchEvent(new CustomEvent('floor-click', { detail: { x: COFFEE.x, z: COFFEE.z } }))
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={() => (document.body.style.cursor = '')}
+      >
         <Box p={[0, 0.2, 0]} s={[0.32, 0.4, 0.36]} c="#2b2d2f" />
         <Box p={[0, 0.42, 0]} s={[0.34, 0.04, 0.38]} c="#b0b6ba" />
         <Box p={[0, 0.06, -0.12]} s={[0.22, 0.04, 0.12]} c="#55595c" />
@@ -841,8 +937,19 @@ export default function Office() {
       <Board3D />
       <Roulette3D />
       <VoteBox3D />
-      {/* 🎄 설계실 오른쪽, 관리부로 가는 유리 파티션 옆 */}
-      <XmasTree x={19.55} z={6.8} />
+      {/* 🎄 다목적실 초록 소파 옆, 탕비실 앞 */}
+      <XmasTree x={TREE.x} z={TREE.z} />
+      {/* ✨ 연말 데코: 전구 줄 · 리스 · 창밖 눈 */}
+      <Garlands />
+      <Wreath p={[21.75, 1.65, D + 0.14]} />
+      <Wreath p={[24.65, 1.65, D + 0.14]} />
+      <Wreath p={[5.75, 1.65, D + 0.14]} />
+      <Wreath p={[7.85, 1.65, D + 0.14]} />
+      <Wreath p={[4.79, 1.75, 4.75]} ry={Math.PI / 2} />
+      <Wreath p={[25.8, 1.7, 7.79]} s={0.8} />
+      <Snow W={W} D={D} />
+      {/* 📅 관리부 북쪽 창가 전광판 */}
+      <DdayBoard x={DDAY.x} z={DDAY.z} />
       {/* 🏛️ 탕비실 북쪽 벽 액자 */}
       <StoryFrame x={26.55} z={7.765} story={STORIES[todayStoryIndex()]} />
     </group>

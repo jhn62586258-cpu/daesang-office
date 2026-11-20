@@ -18,7 +18,16 @@ import {
   removeRestaurant,
   addStory,
   removeStory,
+  addWish,
+  removeWish,
+  saveDday,
+  removeDday,
+  ddayLabel,
+  kstToday,
+  saveModel,
+  removeModel,
 } from './notes'
+import { COFFEE } from './furniture'
 import { STORIES, todayStoryIndex } from './stories'
 import { myUid } from './db'
 import { startMusic, stopMusic, playChime, currentSongName } from './music'
@@ -235,6 +244,11 @@ export function ActionPanel() {
   const nearSeat = useStore((s) => s.nearSeat)
   const nearBoard = useStore((s) => s.nearBoard)
   const nearRoulette = useStore((s) => s.nearRoulette)
+  const nearTree = useStore((s) => s.nearTree)
+  const nearCoffee = useStore((s) => s.nearCoffee)
+  const nearDday = useStore((s) => s.nearDday)
+  const nearModels = useStore((s) => s.nearModels)
+  const holding = useStore((s) => s.holding)
   const sitting = useStore((s) => s.sitting)
   const modal = useStore((s) => s.modal)
   const me = useStore((s) => s.me)
@@ -284,18 +298,25 @@ export function ActionPanel() {
         </div>
       )
     }
+    if (nearCoffee && holding !== 'coffee') {
+      groups.push(
+        <div className="act-group" key="coffee">
+          <div className="act-title">☕ 커피머신</div>
+          <button className="act b-coffee" onClick={brewCoffee}>
+            ☕ 커피 한잔 뽑기
+          </button>
+        </div>
+      )
+    }
     if (inPantry) {
       const act = (kind) => {
         const st = useStore.getState()
         st.doAction(kind)
-        sysMsg(kind === 'coffee' ? `☕ ${st.me.name} ${st.me.title}님이 커피를 내렸어요.` : `🍪 ${st.me.name} ${st.me.title}님이 간식을 먹고 있어요.`)
+        sysMsg(`🍪 ${st.me.name} ${st.me.title}님이 간식을 먹고 있어요.`)
       }
       groups.push(
         <div className="act-group" key="pantry">
           <div className="act-title">탕비실</div>
-          <button className="act b-coffee" onClick={() => act('coffee')}>
-            ☕ 커피 마시기
-          </button>
           <button className="act b-snack" onClick={() => act('snack')}>
             🍪 간식 먹기
           </button>
@@ -304,6 +325,36 @@ export function ActionPanel() {
           </button>
           <button className="act b-story" onClick={() => useStore.getState().set({ modal: 'stories' })}>
             🏛️ 오늘의 건축 이야기 보기
+          </button>
+        </div>
+      )
+    }
+    if (nearTree) {
+      groups.push(
+        <div className="act-group" key="tree">
+          <div className="act-title">🎄 크리스마스 트리</div>
+          <button className="act b-tree" onClick={() => useStore.getState().set({ modal: 'wishes' })}>
+            🎄 트리 소원 카드 달기
+          </button>
+        </div>
+      )
+    }
+    if (nearDday) {
+      groups.push(
+        <div className="act-group" key="dday">
+          <div className="act-title">관리부 전광판</div>
+          <button className="act b-dday" onClick={() => useStore.getState().set({ modal: 'dday' })}>
+            📅 마감 D-Day 보드
+          </button>
+        </div>
+      )
+    }
+    if (nearModels) {
+      groups.push(
+        <div className="act-group" key="models">
+          <div className="act-title">모형 전시대</div>
+          <button className="act b-models" onClick={() => useStore.getState().set({ modal: 'models' })}>
+            📐 진행 중인 프로젝트 보기
           </button>
         </div>
       )
@@ -332,8 +383,31 @@ export function ActionPanel() {
       )
     }
   }
+  if (holding === 'coffee') {
+    groups.push(
+      <div className="act-group" key="mug">
+        <div className="act-title">☕ 따뜻한 커피를 들고 있어요</div>
+        <button
+          className="act b-light"
+          onClick={() => {
+            useStore.getState().returnCoffee()
+            sysMsg('☕ 커피잔을 반납했어요. 잘 마셨습니다!')
+          }}
+        >
+          🫗 커피잔 반납
+        </button>
+      </div>
+    )
+  }
   if (!groups.length) return null
   return <div className="actions">{groups}</div>
+}
+
+function brewCoffee() {
+  const st = useStore.getState()
+  st.brewCoffee()
+  playChime()
+  sysMsg(`☕ 커피를 내렸어요! 동료들에게 "탕비실에서 한잔 하실래요?" 알림을 보냈어요.`)
 }
 
 /* ───────────────────── 모달 공통 ───────────────────── */
@@ -366,6 +440,9 @@ export function Modals() {
   if (modal === 'archive') return <ArchiveModal onClose={close} />
   if (modal === 'stretch') return <StretchModal onClose={close} />
   if (modal === 'stories') return <StoriesModal onClose={close} />
+  if (modal === 'wishes') return <WishesModal onClose={close} />
+  if (modal === 'dday') return <DdayModal onClose={close} />
+  if (modal === 'models') return <ModelsModal onClose={close} />
   if (modal.note) return <NoteView note={modal.note} onClose={close} back={modal.back} />
   if (modal.deskWrite !== undefined) return <DeskWrite idx={modal.deskWrite} onClose={close} />
   if (modal.deskNote) return <DeskNoteView note={modal.deskNote} onClose={close} back={modal.back} />
@@ -1475,6 +1552,16 @@ function StoriesModal({ onClose }) {
 }
 
 /* ───────────────────── 조명 / 음악 컨트롤 ───────────────────── */
+const ACC_LABEL = { null: '없음', santa: '🎅 산타 모자', rudolph: '🦌 루돌프 머리띠' }
+function AccessoryButton() {
+  const acc = useStore((s) => s.accessory)
+  return (
+    <button className={'tool acc-btn' + (acc ? ' on' : '')} onClick={() => useStore.getState().cycleAccessory()} title="누를 때마다 산타 모자 → 루돌프 머리띠 → 없음">
+      🎅 산타/루돌프 <small>{ACC_LABEL[acc]}</small>
+    </button>
+  )
+}
+
 function AmbienceControls() {
   const lightMode = useStore((s) => s.lightMode)
   const timeMode = useStore((s) => s.timeMode)
@@ -1517,9 +1604,12 @@ function AmbienceControls() {
           </span>
         )}
       </button>
-      <button className="tool stretch-btn" onClick={() => useStore.getState().set({ modal: 'stretch' })}>
-        🧘 1분 스트레칭
-      </button>
+      <div className="tool-row">
+        <button className="tool stretch-btn" onClick={() => useStore.getState().set({ modal: 'stretch' })}>
+          🧘 1분 스트레칭
+        </button>
+        <AccessoryButton />
+      </div>
       <div className="bell-tests">
         <button onClick={() => fireAlert('pre')}>🔔 11:25 테스트</button>
         <button onClick={() => fireAlert('lunch')}>🔔 11:30 테스트</button>
@@ -1539,6 +1629,277 @@ function AmbienceControls() {
         </div>
       </div>
     </div>
+  )
+}
+
+/* ───────────────────── ☕ 동료 커피 알림 배너 ───────────────────── */
+export function CoffeeToasts() {
+  const toasts = useStore((s) => s.coffeeToasts)
+  const joined = useStore((s) => s.joined)
+  if (!joined || !toasts.length) return null
+  const go = (key) => {
+    useStore.getState().set({ coffeeToasts: useStore.getState().coffeeToasts.filter((t) => t.key !== key) })
+    window.dispatchEvent(new CustomEvent('floor-click', { detail: { x: COFFEE.x, z: COFFEE.z } }))
+  }
+  return (
+    <div className="coffee-toasts">
+      {toasts.map((t) => (
+        <div key={t.key} className="coffee-toast">
+          <span className="ct-cup">☕</span>
+          <span className="ct-text">
+            <b>
+              {t.name} {t.title}
+            </b>
+            님이 커피를 내렸어요! 탕비실에서 한잔 하실래요?
+          </span>
+          <button onClick={() => go(t.key)}>탕비실로 가기</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ───────────────────── 🎄 트리 소원 카드 ───────────────────── */
+const WISH_COLORS = ['#fff3bf', '#ffe3e3', '#d3f9d8', '#d0ebff', '#f3d9fa', '#ffe8cc']
+function WishesModal({ onClose }) {
+  const wishes = useStore((s) => s.treeWishes)
+  const me = useStore((s) => s.me)
+  const [text, setText] = useState('')
+  const [color, setColor] = useState(WISH_COLORS[0])
+  const [busy, setBusy] = useState(false)
+  const uidMe = myUid()
+  const submit = async (e) => {
+    e.preventDefault()
+    const t = text.trim()
+    if (!t || busy) return
+    setBusy(true)
+    try {
+      await addWish({ text: t, color })
+      sysMsg(`🎄 ${me.name} ${me.title}님이 트리에 소원 카드를 달았어요!`)
+      setText('')
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 소원 카드를 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
+    setBusy(false)
+  }
+  return (
+    <Sheet onClose={onClose} wide className="wish-sheet">
+      <h2>🎄 트리 소원 카드</h2>
+      <p className="sub">올해의 회고나 새해 소원을 한 줄로 적어 트리에 매달아 주세요 · {wishes.length}장 달림</p>
+      <form className="wish-form" onSubmit={submit}>
+        <div className="wish-card-preview" style={{ background: color }}>
+          <span className="wc-hole" />
+          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} maxLength={100} placeholder="예: 내년엔 모든 공모전 당선! 🏆" />
+          <span className="wc-count">{text.length}/100</span>
+        </div>
+        <div className="wish-row">
+          <div className="swatches">
+            {WISH_COLORS.map((c) => (
+              <button type="button" key={c} className={color === c ? 'on' : ''} style={{ background: c }} onClick={() => setColor(c)} />
+            ))}
+          </div>
+          <button className="go small tree-go" disabled={!text.trim() || busy}>
+            {busy ? '매다는 중…' : '🎄 트리에 매달기'}
+          </button>
+        </div>
+      </form>
+      <div className="wish-wall">
+        {wishes.length === 0 && <div className="room-empty">아직 매달린 카드가 없어요. 첫 소원을 달아 주세요 ✨</div>}
+        {wishes.map((w, i) => (
+          <div key={w.id} className="wish-card" style={{ background: w.color, transform: `rotate(${((i % 5) - 2) * 1.2}deg)` }}>
+            <span className="wc-hole" />
+            <p>{w.text}</p>
+            <div className="wc-by">
+              — {w.name} {w.rank}
+              {w.authorId === uidMe && (
+                <button onClick={() => askConfirm({ title: '내 소원 카드를 뗄까요?', okText: '떼기', danger: true, onOk: () => removeWish(w) })}>떼기</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  )
+}
+
+/* ───────────────────── 📅 마감 D-Day 보드 ───────────────────── */
+function DdayModal({ onClose }) {
+  const ddays = useStore((s) => s.ddays)
+  const me = useStore((s) => s.me)
+  const [editing, setEditing] = useState(null) // null | 'new' | 프로젝트
+  const [name, setName] = useState('')
+  const [date, setDate] = useState(kstToday())
+  const [busy, setBusy] = useState(false)
+  const startEdit = (p) => {
+    setEditing(p || 'new')
+    setName(p ? p.name : '')
+    setDate(p ? p.date : kstToday())
+  }
+  const save = async (e) => {
+    e.preventDefault()
+    if (!name.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(date) || busy) return
+    setBusy(true)
+    try {
+      await saveDday({ id: editing && editing !== 'new' ? editing.id : null, name, date })
+      const d = ddayLabel(date)
+      sysMsg(`📅 ${me.name} ${me.title}님이 마감을 ${editing === 'new' ? '등록' : '수정'}했어요: ${name.trim()} (${d.text})`)
+      setEditing(null)
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 마감을 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
+    setBusy(false)
+  }
+  const sorted = [...ddays].sort((a, b) => {
+    const da = ddayLabel(a.date).diff
+    const db = ddayLabel(b.date).diff
+    return (da < 0 ? 1e6 - da : da) - (db < 0 ? 1e6 - db : db)
+  })
+  return (
+    <Sheet onClose={onClose} wide className="dday-sheet">
+      <h2>📅 프로젝트 마감 D-Day 보드</h2>
+      <p className="sub">오늘({kstToday().replace(/-/g, '.')}, KST) 기준으로 자동 계산돼 관리부 전광판에 표시돼요 · 다가오는 순서로 3개</p>
+      <div className="dday-list">
+        {sorted.length === 0 && <div className="room-empty">등록된 마감이 없어요.</div>}
+        {sorted.map((p) => {
+          const d = ddayLabel(p.date)
+          const tone = d.diff < 0 ? 'past' : d.diff <= 3 ? 'hot' : d.diff <= 7 ? 'warm' : 'cool'
+          return (
+            <div key={p.id} className={'dday-item ' + tone}>
+              <span className="dd-badge">{d.text}</span>
+              <div className="dd-body">
+                <b>{p.name}</b>
+                <span>
+                  {p.date.replace(/-/g, '.')} · {p.by} 등록
+                </span>
+              </div>
+              <button className="ghost" onClick={() => startEdit(p)}>
+                ✏️ 수정
+              </button>
+              <button
+                className="ghost danger"
+                onClick={() => askConfirm({ title: `'${p.name}' 마감을 삭제할까요?`, okText: '삭제', danger: true, onOk: () => removeDday(p) })}
+              >
+                🗑️
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      {editing ? (
+        <form className="dday-form" onSubmit={save}>
+          <div className="sf-title">{editing === 'new' ? '+ 새 마감 등록' : '✏️ 마감 수정'}</div>
+          <div className="sf-row">
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="프로젝트명 (예: OO현상설계 제출)" autoFocus />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="date-in" />
+          </div>
+          {name.trim() && /^\d{4}-\d{2}-\d{2}$/.test(date) && <div className="dd-preview">전광판 표시: <b>{name.trim()}</b> · <b>{ddayLabel(date).text}</b></div>}
+          <div className="sheet-foot">
+            <button type="button" className="ghost" onClick={() => setEditing(null)}>
+              취소
+            </button>
+            <button className="go small" disabled={!name.trim() || busy}>
+              {busy ? '저장 중…' : '저장'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="sheet-foot">
+          <button className="go small" onClick={() => startEdit(null)}>
+            + 마감 등록
+          </button>
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+/* ───────────────────── 📐 진행 중인 프로젝트 (모형 전시대) ───────────────────── */
+function ModelsModal({ onClose }) {
+  const models = useStore((s) => s.archiModels)
+  const me = useStore((s) => s.me)
+  const [editing, setEditing] = useState(null) // null | 'new' | 프로젝트
+  const [f, setF] = useState({ title: '', desc: '', url: '' })
+  const [busy, setBusy] = useState(false)
+  const startEdit = (m) => {
+    setEditing(m || 'new')
+    setF(m ? { title: m.title, desc: m.desc, url: m.url } : { title: '', desc: '', url: '' })
+  }
+  const save = async (e) => {
+    e.preventDefault()
+    if (!f.title.trim() || busy) return
+    if (f.url.trim() && !/^https?:\/\//.test(f.url.trim())) return sysMsg('ℹ️ 링크는 http:// 또는 https:// 로 시작해야 해요.')
+    setBusy(true)
+    try {
+      const isNew = editing === 'new'
+      await saveModel({ id: isNew ? null : editing.id, at: isNew ? null : editing.at, ...f })
+      sysMsg(`📐 ${me.name} ${me.title}님이 프로젝트를 ${isNew ? '등록' : '수정'}했어요: ${f.title.trim()}`)
+      setEditing(null)
+    } catch (e2) {
+      console.warn(e2)
+      sysMsg('⚠️ 프로젝트를 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
+    setBusy(false)
+  }
+  return (
+    <Sheet onClose={onClose} wide className="models-sheet">
+      <h2>📐 진행 중인 프로젝트 안내</h2>
+      <p className="sub">회의 테이블 위 모형 전시대 · 사무실에서 진행 중인 프로젝트를 누구나 등록하고 고칠 수 있어요</p>
+      {editing ? (
+        <form className="model-form" onSubmit={save}>
+          <div className="sf-title">{editing === 'new' ? '+ 새 프로젝트 등록' : '✏️ 프로젝트 수정'}</div>
+          <input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} maxLength={40} placeholder="프로젝트 제목 (예: 안양 동편 근린생활시설 신축)" autoFocus />
+          <textarea value={f.desc} onChange={(e) => setF({ ...f, desc: e.target.value })} maxLength={300} placeholder="개요 (규모·용도·진행 단계·담당 등, 300자)" />
+          <input value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} maxLength={300} placeholder="참고 링크 (선택) https://…" />
+          <div className="sheet-foot">
+            <button type="button" className="ghost" onClick={() => setEditing(null)}>
+              취소
+            </button>
+            <button className="go small" disabled={!f.title.trim() || busy}>
+              {busy ? '저장 중…' : '저장'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <div className="model-grid">
+            {models.length === 0 && <div className="room-empty">아직 등록된 프로젝트가 없어요. 첫 프로젝트를 소개해 주세요!</div>}
+            {models.map((m, i) => (
+              <div key={m.id} className="model-card">
+                <div className="mc-icon">{['🏢', '🏡', '🏛️', '🏫', '🏬'][i % 5]}</div>
+                <b>{m.title}</b>
+                {m.desc && <p>{m.desc}</p>}
+                {m.url && (
+                  <a href={m.url} target="_blank" rel="noopener noreferrer">
+                    🔗 참고 링크 열기
+                  </a>
+                )}
+                <div className="mc-meta">
+                  {m.by} · {fullDate(m.updatedAt || m.at)} 수정
+                </div>
+                <div className="mc-actions">
+                  <button className="ghost" onClick={() => startEdit(m)}>
+                    ✏️ 수정
+                  </button>
+                  <button
+                    className="ghost danger"
+                    onClick={() => askConfirm({ title: `'${m.title}'을(를) 삭제할까요?`, okText: '삭제', danger: true, onOk: () => removeModel(m) })}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="sheet-foot">
+            <button className="go small" onClick={() => startEdit(null)}>
+              + 프로젝트 등록
+            </button>
+          </div>
+        </>
+      )}
+    </Sheet>
   )
 }
 

@@ -50,6 +50,9 @@ git push -u origin main
 | `/snack_votes/{주차}/{uid}` | 간식 투표 (1인 1표, 매주 월요일 새 회차) |
 | `/custom_restaurants/{id}` | 직원이 추가한 점심 룰렛 식당 |
 | `/archi_stories/{id}` | 직원이 공유한 건축 이야기·기사 (작성자만 삭제) |
+| `/tree_wishes/{id}` | 🎄 트리 소원 카드 (100자, 작성자만 삭제) |
+| `/project_dday/{id}` | 📅 프로젝트 마감 D-Day (관리부 전광판) |
+| `/archi_models/{id}` | 📐 진행 중인 프로젝트 안내 (회의 테이블 모형 전시대) |
 
 > 새 버전으로 업데이트할 때는 **`database.rules.json`을 Firebase 콘솔 → Realtime Database → 규칙에 다시 붙여넣고 [게시]** 해야 새 기능이 저장됩니다.
 

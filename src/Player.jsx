@@ -6,6 +6,7 @@ import Character from './Character'
 import { live, useStore } from './store'
 import { isFree, findPath } from './nav'
 import { zoneAt, PANTRY, W, D, seats, chairOf, ROULETTE } from './layout'
+import { TREE, COFFEE, MODELS } from './furniture'
 
 const SPEED = 3.6
 const GLIDE = 2.0
@@ -72,6 +73,8 @@ export function Player() {
   const bubble = useStore((s) => s.bubble)
   const emote = useStore((s) => s.emote)
   const holding = useStore((s) => s.holding)
+  const holdUntil = useStore((s) => s.holdUntil)
+  const accessory = useStore((s) => s.accessory)
   const mood = useStore((s) => s.mood)
   const status = useStore((s) => s.status)
   const group = useRef()
@@ -173,9 +176,10 @@ export function Player() {
   }, [emote])
   useEffect(() => {
     if (!holding) return
-    const t = setTimeout(() => useStore.getState().clearHolding(), 25000)
+    // 커피는 3분, 간식은 25초 뒤 자동으로 내려놓음 (커피는 [반납] 버튼으로도)
+    const t = setTimeout(() => useStore.getState().clearHolding(), Math.max(1000, (holdUntil || Date.now() + 25000) - Date.now()))
     return () => clearTimeout(t)
-  }, [holding, emote])
+  }, [holding, holdUntil])
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05)
@@ -272,6 +276,10 @@ export function Player() {
     st.setIf('inPantry', p.x > PANTRY.x1 && p.z > PANTRY.z1)
     st.setIf('nearBoard', p.x > 6.9 && p.x < 10.1 && p.z > 2.6 && p.z < 4.7)
     st.setIf('nearRoulette', Math.hypot(p.x - ROULETTE.x, p.z - ROULETTE.z) < 1.6)
+    st.setIf('nearTree', Math.hypot(p.x - TREE.x, p.z - TREE.z) < 1.7)
+    st.setIf('nearCoffee', Math.hypot(p.x - COFFEE.x, p.z - COFFEE.z) < 1.35)
+    st.setIf('nearDday', p.x > 20.2 && p.x < 23.4 && p.z < 2.7)
+    st.setIf('nearModels', Math.abs(p.x - MODELS.x) < 1.6 && Math.abs(p.z - MODELS.z) < 2.6)
     let near = null
     if (!p.sitting && !glide.current) {
       let best = 1.3
@@ -290,7 +298,7 @@ export function Player() {
   if (!me) return null
   return (
     <group ref={group}>
-      <Character anim={anim} shirt={me.shirt} hair={me.hair} pants={me.pants} holding={holding} />
+      <Character anim={anim} shirt={me.shirt} hair={me.hair} pants={me.pants} holding={holding} accessory={accessory} />
       <HeadOverlay name={me.name} title={me.title} bubble={bubble} emote={emote} mood={mood.e} status={`${status.e} ${status.l}`} mine />
     </group>
   )
@@ -339,7 +347,7 @@ export function RemotePlayer({ r }) {
   const statusText = r.status ? `${r.status} ${STATUS_LABEL[r.status] || ''}`.trim() : null
   return (
     <group ref={group}>
-      <Character anim={anim} shirt={r.shirt} hair={r.hair} pants={r.pants} holding={r.holding} />
+      <Character anim={anim} shirt={r.shirt} hair={r.hair} pants={r.pants} holding={r.holding} accessory={r.accessory} />
       <HeadOverlay name={r.name} title={r.title} bubble={bubble} emote={emote} mood={r.mood} status={statusText} />
     </group>
   )

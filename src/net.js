@@ -17,6 +17,7 @@ let lastBeat = 0
 const tab = Math.random().toString(36).slice(2, 8)
 let sessionKey = 'local_' + tab
 const seenSpin = new Set()
+const seenBrew = new Set()
 const HEX = /^#[0-9a-fA-F]{6}$/
 
 const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '')
@@ -96,6 +97,8 @@ function buildPresence() {
     mo: s.mood.e,
     st: s.status.e,
     sp: s.lastSpin,
+    ac: s.accessory, // 🎅 산타 모자 / 🦌 루돌프 머리띠
+    cf: s.lastBrew, // ☕ 커피 뽑기 알림
   }
 }
 
@@ -138,7 +141,21 @@ function applyPeer(id, pr) {
     emote: pr.em && typeof pr.em === 'object' ? { kind: ['coffee', 'snack', 'fresh'].includes(pr.em.k) ? pr.em.k : 'snack', until: num(pr.em.u), key: num(pr.em.u) } : null,
     mood: str(pr.mo, 8),
     status: str(pr.st, 8),
+    accessory: pr.ac === 'santa' || pr.ac === 'rudolph' ? pr.ac : null,
   })
+
+  // ☕ 동료가 커피를 뽑음 → 1분 이내의 새 소식만 배너로
+  if (pr.cf && typeof pr.cf.id === 'string' && !seenBrew.has(id + pr.cf.id)) {
+    seenBrew.add(id + pr.cf.id)
+    if (Date.now() - num(pr.cf.at) < 60000 && st.joined) {
+      const key = id + pr.cf.id
+      st.set({ coffeeToasts: [...st.coffeeToasts.slice(-2), { key, name, title, at: Date.now() }] })
+      setTimeout(() => {
+        const cur = useStore.getState().coffeeToasts
+        useStore.getState().set({ coffeeToasts: cur.filter((t) => t.key !== key) })
+      }, 7000)
+    }
+  }
 
   // 룰렛 결과 (식당 이름을 함께 받아서, 추가 식당 목록이 달라도 정확히 표시)
   if (pr.sp && typeof pr.sp.id === 'string' && !seenSpin.has(id + pr.sp.id)) {

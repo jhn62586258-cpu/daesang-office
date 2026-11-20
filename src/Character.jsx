@@ -10,7 +10,7 @@ function M({ c, ...p }) {
 
 // 귀여운 2등신 회사원 캐릭터 (셔츠 + 슬랙스 + 사원증)
 // anim: { moving: bool } 을 담은 ref 객체
-export default function Character({ anim, shirt = '#a8d0e6', pants = '#2f3e55', hair = 'short', hairColor = '#2b2220', holding = null }) {
+export default function Character({ anim, shirt = '#a8d0e6', pants = '#2f3e55', hair = 'short', hairColor = '#2b2220', holding = null, accessory = null }) {
   const legL = useRef()
   const legR = useRef()
   const armL = useRef()
@@ -147,6 +147,8 @@ export default function Character({ anim, shirt = '#a8d0e6', pants = '#2f3e55', 
             <sphereGeometry args={[0.1, 12, 10]} />
             <M c={hairColor} />
           </mesh>
+          {accessory === 'santa' && <SantaHat />}
+          {accessory === 'rudolph' && <RudolphBand />}
           {hair === 'long' && (
             <>
               <mesh position={[0, -0.18, -0.12]} scale={[1, 1.4, 0.7]} castShadow>
@@ -198,22 +200,24 @@ function HeldItem({ kind }) {
   if (kind === 'coffee')
     return (
       <group position={[0.03, -0.36, 0.05]} rotation={[1.25, 0, 0]}>
+        {/* 따뜻한 머그잔 + 손잡이 */}
         <mesh castShadow>
-          <cylinderGeometry args={[0.065, 0.05, 0.17, 16]} />
-          <meshStandardMaterial color="#ffffff" />
+          <cylinderGeometry args={[0.065, 0.055, 0.16, 18]} />
+          <meshStandardMaterial color="#fff8f0" roughness={0.35} />
         </mesh>
-        <mesh position={[0, 0.0, 0]}>
-          <cylinderGeometry args={[0.068, 0.06, 0.07, 16]} />
-          <meshStandardMaterial color="#a0703f" />
+        <mesh position={[0, -0.01, 0]}>
+          <cylinderGeometry args={[0.0665, 0.059, 0.05, 18]} />
+          <meshStandardMaterial color="#d6336c" roughness={0.4} />
         </mesh>
-        <mesh position={[0, 0.095, 0]}>
-          <cylinderGeometry args={[0.07, 0.068, 0.025, 16]} />
-          <meshStandardMaterial color="#3d2b1f" />
+        <mesh position={[0.075, 0.0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.035, 0.012, 8, 16]} />
+          <meshStandardMaterial color="#fff8f0" roughness={0.35} />
         </mesh>
-        <mesh position={[0, 0.115, 0]}>
-          <cylinderGeometry args={[0.072, 0.072, 0.015, 16]} />
-          <meshStandardMaterial color="#f5f0e8" />
+        <mesh position={[0, 0.072, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.058, 18]} />
+          <meshStandardMaterial color="#5a3a22" roughness={0.2} />
         </mesh>
+        <Steam />
       </group>
     )
   return (
@@ -233,6 +237,84 @@ function HeldItem({ kind }) {
           <meshStandardMaterial color="#3d2416" />
         </mesh>
       ))}
+    </group>
+  )
+}
+
+// ☕ 모락모락 김
+function Steam() {
+  const puffs = useRef([])
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    puffs.current.forEach((m, i) => {
+      if (!m) return
+      const k = (t * 0.55 + i / 4) % 1
+      m.position.set(Math.sin(t * 2 + i * 1.7) * 0.025 * k, 0.09 + k * 0.32, Math.cos(t * 1.6 + i) * 0.015 * k)
+      m.scale.setScalar(0.5 + k * 1.4)
+      m.material.opacity = 0.5 * Math.sin(k * Math.PI)
+    })
+  })
+  return [0, 1, 2, 3].map((i) => (
+    <mesh key={i} ref={(m) => (puffs.current[i] = m)}>
+      <sphereGeometry args={[0.03, 8, 8]} />
+      <meshBasicMaterial color="#ffffff" transparent opacity={0.4} depthWrite={false} />
+    </mesh>
+  ))
+}
+
+// 🎅 산타 모자
+function SantaHat() {
+  return (
+    <group position={[0, 0.17, -0.02]} rotation={[-0.15, 0, 0.12]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.27, 0.06, 10, 28]} />
+        <meshStandardMaterial color="#ffffff" roughness={1} />
+      </mesh>
+      <group position={[0, 0.03, 0]} rotation={[0, 0, -0.45]}>
+        <mesh position={[0, 0.2, 0]} castShadow>
+          <coneGeometry args={[0.26, 0.42, 20]} />
+          <meshStandardMaterial color="#e03131" roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 0.42, 0]}>
+          <sphereGeometry args={[0.065, 12, 12]} />
+          <meshStandardMaterial color="#ffffff" roughness={1} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+// 🦌 루돌프 머리띠 + 빨간 코
+function RudolphBand() {
+  const brown = <meshStandardMaterial color="#8b5a2b" roughness={0.6} />
+  const antler = (side) => (
+    <group position={[side * 0.15, 0.27, -0.02]} rotation={[0, 0, -side * 0.35]}>
+      <mesh position={[0, 0.1, 0]}>
+        <cylinderGeometry args={[0.018, 0.024, 0.2, 8]} />
+        {brown}
+      </mesh>
+      <mesh position={[side * 0.05, 0.13, 0]} rotation={[0, 0, -side * 0.9]}>
+        <cylinderGeometry args={[0.014, 0.016, 0.1, 8]} />
+        {brown}
+      </mesh>
+      <mesh position={[-side * 0.035, 0.17, 0]} rotation={[0, 0, side * 0.8]}>
+        <cylinderGeometry args={[0.013, 0.015, 0.08, 8]} />
+        {brown}
+      </mesh>
+    </group>
+  )
+  return (
+    <group>
+      <mesh position={[0, 0.0, -0.02]} rotation={[0, 0, 0]}>
+        <torusGeometry args={[0.32, 0.018, 8, 32, Math.PI]} />
+        <meshStandardMaterial color="#c92a2a" roughness={0.5} />
+      </mesh>
+      {antler(-1)}
+      {antler(1)}
+      <mesh position={[0, -0.05, 0.3]}>
+        <sphereGeometry args={[0.05, 14, 14]} />
+        <meshStandardMaterial color="#ff2b2b" emissive="#ff2020" emissiveIntensity={0.6} roughness={0.25} />
+      </mesh>
     </group>
   )
 }

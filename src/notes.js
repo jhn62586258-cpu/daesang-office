@@ -6,6 +6,9 @@
 //   /snack_votes/{주차}/{uid}      간식 투표 (1인 1표, 매주 월요일 새 회차)
 //   /custom_restaurants/{id}      직원이 추가한 점심 룰렛 식당
 //   /archi_stories/{id}           직원이 공유한 건축 이야기·기사
+//   /tree_wishes/{id}             🎄 트리 소원 카드 (작성자 본인만 삭제)
+//   /project_dday/{id}            📅 프로젝트 마감 D-Day
+//   /archi_models/{id}            📐 진행 중인 프로젝트 안내 (모형 전시대)
 import { useStore, uid } from './store'
 import { dbOn, dbSet, dbRemove, myUid, isFirebase, dbReady } from './db'
 
@@ -67,6 +70,38 @@ export async function initData() {
         ),
       }),
     { last: 100 }
+  )
+  dbOn(
+    'tree_wishes',
+    (v) =>
+      useStore.getState().set({
+        treeWishes: toList(v, (k, d) =>
+          d && typeof d === 'object'
+            ? { id: k, text: s(d.text, 100), color: typeof d.color === 'string' && HEX.test(d.color) ? d.color : '#fff3bf', name: s(d.name, 10), rank: s(d.rank, 6), at: n0(d.at), authorId: s(d.authorId, 64) }
+            : null
+        ),
+      }),
+    { last: 150 }
+  )
+  dbOn('project_dday', (v) =>
+    useStore.getState().set({
+      ddays: Object.entries(v || {})
+        .map(([k, d]) => (d && typeof d === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(d.date || '') ? { id: k, name: s(d.name, 40), date: d.date, by: s(d.by, 20), at: n0(d.at) } : null))
+        .filter((x) => x && x.name)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    })
+  )
+  dbOn('archi_models', (v) =>
+    useStore.getState().set({
+      archiModels: Object.entries(v || {})
+        .map(([k, d]) =>
+          d && typeof d === 'object'
+            ? { id: k, title: s(d.title, 40), desc: s(d.desc, 300), url: /^https?:\/\//.test(d.url || '') ? s(d.url, 300) : '', by: s(d.by, 20), at: n0(d.at), updatedAt: n0(d.updatedAt) }
+            : null
+        )
+        .filter((x) => x && x.title)
+        .sort((a, b) => a.at - b.at),
+    })
   )
   dbOn('custom_restaurants', (v) =>
     useStore.getState().set({
@@ -186,3 +221,38 @@ export async function addStory({ title, text, url }) {
   await dbSet(`archi_stories/${id}`, { title: title.trim().slice(0, 40), text: text.trim().slice(0, 300), url: link, name: me.name, rank: me.title, at: Date.now(), authorId: myUid() })
 }
 export const removeStory = (st) => dbRemove(`archi_stories/${st.id}`)
+
+/* ───────── 🎄 트리 소원 카드 ───────── */
+export async function addWish({ text, color }) {
+  const me = useStore.getState().me
+  const id = 'w' + Date.now().toString(36) + uid()
+  await dbSet(`tree_wishes/${id}`, { text: text.trim().slice(0, 100), color, name: me.name, rank: me.title, at: Date.now(), authorId: myUid() })
+}
+export const removeWish = (w) => dbRemove(`tree_wishes/${w.id}`)
+
+/* ───────── 📅 프로젝트 마감 D-Day ───────── */
+// KST 기준 오늘 날짜 'YYYY-MM-DD'
+export function kstToday() {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+}
+// 'D-5' / 'D-DAY' / 'D+3'
+export function ddayLabel(date) {
+  const diff = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(kstToday() + 'T00:00:00Z')) / 86400000)
+  if (diff === 0) return { text: 'D-DAY', diff }
+  return { text: diff > 0 ? `D-${diff}` : `D+${-diff}`, diff }
+}
+export async function saveDday({ id, name, date }) {
+  const me = useStore.getState().me
+  const key = id || 'p' + Date.now().toString(36) + uid()
+  await dbSet(`project_dday/${key}`, { name: name.trim().slice(0, 40), date, by: `${me.name} ${me.title}`, at: Date.now() })
+}
+export const removeDday = (p) => dbRemove(`project_dday/${p.id}`)
+
+/* ───────── 📐 진행 중인 프로젝트 (모형 전시대) ───────── */
+export async function saveModel({ id, title, desc, url, at }) {
+  const me = useStore.getState().me
+  const key = id || 'm' + Date.now().toString(36) + uid()
+  const link = /^https?:\/\//.test((url || '').trim()) ? url.trim().slice(0, 300) : ''
+  await dbSet(`archi_models/${key}`, { title: title.trim().slice(0, 40), desc: (desc || '').trim().slice(0, 300), url: link, by: `${me.name} ${me.title}`, at: at || Date.now(), updatedAt: Date.now() })
+}
+export const removeModel = (m) => dbRemove(`archi_models/${m.id}`)

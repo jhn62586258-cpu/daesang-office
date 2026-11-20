@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import Office from './Office'
 import { Player, RemotePlayer, ClickMarker, CameraRig } from './Player'
-import { EntryModal, ActionPanel, Modals, HUD, LunchAlerts, ConfirmDialog } from './UI'
+import { EntryModal, ActionPanel, Modals, HUD, LunchAlerts, ConfirmDialog, CoffeeToasts } from './UI'
 import { Chat } from './ChatPanel'
 import { initNet } from './net'
 import { initData } from './notes'
@@ -51,6 +51,7 @@ export default function App() {
       <HUD />
       <Chat />
       <LunchAlerts />
+      <CoffeeToasts />
       <ActionPanel />
       <Modals />
       <EntryModal />
