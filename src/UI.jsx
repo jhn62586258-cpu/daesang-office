@@ -28,6 +28,9 @@ import {
   removeModel,
 } from './notes'
 import { COFFEE } from './furniture'
+import { canRide } from './Player'
+import NiroLog from './NiroLog'
+import { cycleWeatherPreview } from './weather'
 import { STORIES, todayStoryIndex } from './stories'
 import { myUid } from './db'
 import { startMusic, stopMusic, playChime, currentSongName } from './music'
@@ -249,6 +252,10 @@ export function ActionPanel() {
   const nearDday = useStore((s) => s.nearDday)
   const nearModels = useStore((s) => s.nearModels)
   const holding = useStore((s) => s.holding)
+  const nearStroller = useStore((s) => s.nearStroller)
+  const nearNiro = useStore((s) => s.nearNiro)
+  const riding = useStore((s) => s.riding)
+  const strollerBusy = useStore((s) => Object.values(s.remotes).some((r) => r.riding))
   const sitting = useStore((s) => s.sitting)
   const modal = useStore((s) => s.modal)
   const me = useStore((s) => s.me)
@@ -329,6 +336,32 @@ export function ActionPanel() {
         </div>
       )
     }
+    if (nearStroller && !riding) {
+      groups.push(
+        <div className="act-group" key="stroller">
+          <div className="act-title">🍼 하린이 전용 유모차</div>
+          {!canRide(me.name) ? (
+            <span className="act-note">닉네임에 '하린'이 들어간 아기만 탈 수 있어요 👶</span>
+          ) : strollerBusy ? (
+            <span className="act-note">다른 하린이가 타고 있어요</span>
+          ) : (
+            <button className="act b-ride" onClick={() => window.dispatchEvent(new Event('ride-request'))}>
+              🍼 유모차 타기
+            </button>
+          )}
+        </div>
+      )
+    }
+    if (nearNiro) {
+      groups.push(
+        <div className="act-group" key="niro">
+          <div className="act-title">🔑 니로 키박스</div>
+          <button className="act b-niro" onClick={() => useStore.getState().set({ modal: 'niro' })}>
+            🚗 니로 운행일지
+          </button>
+        </div>
+      )
+    }
     if (nearTree) {
       groups.push(
         <div className="act-group" key="tree">
@@ -382,6 +415,16 @@ export function ActionPanel() {
         </div>
       )
     }
+  }
+  if (riding) {
+    groups.push(
+      <div className="act-group" key="riding">
+        <div className="act-title">🍼 유모차 타는 중 · 방향키로 이동</div>
+        <button className="act b-light" onClick={() => window.dispatchEvent(new Event('unride-request'))}>
+          🚼 유모차 내리기
+        </button>
+      </div>
+    )
   }
   if (holding === 'coffee') {
     groups.push(
@@ -443,6 +486,7 @@ export function Modals() {
   if (modal === 'wishes') return <WishesModal onClose={close} />
   if (modal === 'dday') return <DdayModal onClose={close} />
   if (modal === 'models') return <ModelsModal onClose={close} />
+  if (modal === 'niro') return <NiroModal onClose={close} />
   if (modal.note) return <NoteView note={modal.note} onClose={close} back={modal.back} />
   if (modal.deskWrite !== undefined) return <DeskWrite idx={modal.deskWrite} onClose={close} />
   if (modal.deskNote) return <DeskNoteView note={modal.deskNote} onClose={close} back={modal.back} />
@@ -1562,6 +1606,65 @@ function AccessoryButton() {
   )
 }
 
+/* ───────────────────── 🌤️ 과천시 실시간 날씨 ───────────────────── */
+const PREVIEW_LABEL = { snow: '❄️ 눈', rain: '🌧️ 비', none: '☀️ 맑음' }
+function WeatherPill() {
+  const w = useStore((s) => s.weather)
+  const err = useStore((s) => s.weatherError)
+  const ov = useStore((s) => s.weatherOverride)
+  return (
+    <button className="weather-pill" onClick={cycleWeatherPreview} title={'Open-Meteo 실시간 날씨 · 10분마다 갱신\n누르면 창밖 효과 미리보기: 실시간 → 눈 → 비 → 맑음'}>
+      📍 과천시{' '}
+      {w ? (
+        <>
+          <span className="wp-temp">{w.temp}°C</span> {w.icon} <small>{w.label}</small>
+        </>
+      ) : (
+        <small>{err ? '날씨 불러오기 실패' : '날씨 불러오는 중…'}</small>
+      )}
+      {ov && <em>미리보기 {PREVIEW_LABEL[ov]}</em>}
+    </button>
+  )
+}
+
+/* ───────────────────── 🦘 점프 버튼 (모바일/마우스) ───────────────────── */
+export function JumpButton() {
+  const joined = useStore((s) => s.joined)
+  if (!joined) return null
+  return (
+    <button
+      className="jump-btn"
+      tabIndex={-1}
+      onMouseDown={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        e.preventDefault()
+        window.dispatchEvent(new Event('jump-request'))
+      }}
+      title="Space 키로도 점프할 수 있어요"
+    >
+      <span>⬆️</span>점프
+    </button>
+  )
+}
+
+/* ───────────────────── 🚗 니로 운행일지 팝업 ───────────────────── */
+function NiroModal({ onClose }) {
+  const me = useStore((s) => s.me)
+  const seatName = seats.find((x) => x.name === me.name) ? `${me.name} ${me.title}` : ''
+  return (
+    <Sheet onClose={onClose} wide className="niro-sheet">
+      <h2>🚗 니로(Niro) 법인차량 운행일지</h2>
+      <p className="sub">
+        모바일에서는 주소 뒤에 <code>?niro=1</code> 을 붙이면 이 화면만 바로 열려요
+      </p>
+      <NiroLog
+        defaultDriver={seatName}
+        onSaved={(r) => sysMsg(`🚗 ${r.driver}님의 니로 운행일지가 저장됐어요 (${r.dest} · ${r.distance}km)`)}
+      />
+    </Sheet>
+  )
+}
+
 function AmbienceControls() {
   const lightMode = useStore((s) => s.lightMode)
   const timeMode = useStore((s) => s.timeMode)
@@ -1594,6 +1697,7 @@ function AmbienceControls() {
   ]
   return (
     <div className="amb">
+      <WeatherPill />
       <button className={'tool music' + (musicOn ? ' on' : '')} onClick={toggleMusic}>
         {musicOn ? '🎵 배경음악 ON' : '🔇 배경음악 OFF'}
         {musicOn && (

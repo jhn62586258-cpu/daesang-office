@@ -5,6 +5,8 @@ export const TREE = { x: 27.65, z: 6.55 } // 🎄 크리스마스 트리
 export const COFFEE = { x: 27.15, z: 8.75 } // ☕ 탕비실 커피머신 앞
 export const MODELS = { x: 15.45, z: 6.5 } // 📐 공용 회의 테이블 위 모형 전시
 export const DDAY = { x: 21.75, z: 0.16 } // 📅 관리부 북쪽 창가 전광판
+export const STROLLER = { x: 27.85, z: 1.75, rot: -Math.PI / 2 } // 🍼 하린이 유모차 (다목적실 소파 옆, 충돌 판정 없음)
+export const NIRO = { x: 21.72, z: 9.2 } // 🚗 주출입구 옆 니로 키박스
 // 모든 항목: x,z = 중심, w = x폭, d = z깊이
 export const furniture = [
   // 조대호 대표님실
@@ -51,6 +53,8 @@ export const furniture = [
   { type: 'fridge', x: 28.15, z: 8.1, w: 0.65, d: 0.65 },
   // 🎄 크리스마스 트리 — 다목적실 초록 소파 옆, 탕비실 앞 (렌더링은 XmasTree)
   { type: 'xmasTree', x: 27.65, z: 6.55, w: 0.9, d: 0.9 },
+  // 🚗 니로 키박스 스탠드 (렌더링은 NiroKiosk)
+  { type: 'niroKiosk', x: 21.72, z: 9.2, w: 0.5, d: 0.3 },
   // 탕비실 옆 점심 룰렛 (렌더링은 Roulette3D)
   { type: 'roulette', x: 25.0, z: 9.26, w: 0.78, d: 0.45 },
 ]

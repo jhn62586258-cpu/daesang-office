@@ -6,9 +6,16 @@ import Character from './Character'
 import { live, useStore } from './store'
 import { isFree, findPath } from './nav'
 import { zoneAt, PANTRY, W, D, seats, chairOf, ROULETTE } from './layout'
-import { TREE, COFFEE, MODELS } from './furniture'
+import { TREE, COFFEE, MODELS, STROLLER, NIRO } from './furniture'
+import { Stroller } from './Extras'
 
 const SPEED = 3.6
+const RIDE_SPEED = 2.7 // 유모차는 살짝 천천히
+const JUMP_V = 5.6 // 점프 초속 (약 0.9m 높이)
+const GRAVITY = 17
+
+// 하린이 전용 유모차: 닉네임에 '하린'이 들어가면 탈 수 있음
+export const canRide = (name) => typeof name === 'string' && name.includes('하린')
 const GLIDE = 2.0
 const keys = new Set()
 const KEYMAP = {
@@ -85,6 +92,8 @@ export function Player() {
   const glide = useRef(null) // { x, z, rot, then }
   const seatInfo = useRef(null) // 앉아 있는 동안 { idx, stand }
   const afterStand = useRef(null) // 일어난 뒤 이어서 할 클릭 이동
+  const strollerAnim = useRef({ moving: false })
+  const riding = useStore((s) => s.riding)
 
   useEffect(() => {
     const goTo = (x, z) => {
@@ -109,6 +118,11 @@ export function Player() {
     }
     const down = (e) => {
       if (typing() || useStore.getState().modal) return
+      if (e.code === 'Space') {
+        e.preventDefault() // 포커스된 버튼이 눌리거나 화면이 스크롤되지 않게
+        if (!e.repeat) jump()
+        return
+      }
       const k = KEYMAP[e.code]
       if (k) {
         e.preventDefault()
@@ -147,6 +161,30 @@ export function Player() {
       }
     }
     const stand = () => standUp()
+    // 🦘 점프: 바닥에 있을 때만 (앉아 있거나 유모차 탑승 중에는 불가)
+    const jump = () => {
+      const p = live.player
+      if (p.y > 0.001 || p.sitting || p.riding || glide.current) return
+      p.vy = JUMP_V
+      p.jumpCount = (p.jumpCount || 0) + 1
+    }
+    // 🍼 유모차 타기 / 내리기
+    const ride = () => {
+      const p = live.player
+      if (p.riding || seatInfo.current || glide.current) return
+      path.current = null
+      live.target = null
+      glide.current = { x: STROLLER.x, z: STROLLER.z, rot: STROLLER.rot, then: 'ride' }
+    }
+    const unride = () => {
+      const p = live.player
+      if (!p.riding) return
+      p.riding = false
+      useStore.getState().set({ riding: false })
+    }
+    window.addEventListener('jump-request', jump)
+    window.addEventListener('ride-request', ride)
+    window.addEventListener('unride-request', unride)
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
     window.addEventListener('blur', blur)
@@ -160,6 +198,9 @@ export function Player() {
       window.removeEventListener('floor-click', click)
       window.removeEventListener('sit-request', sit)
       window.removeEventListener('stand-request', stand)
+      window.removeEventListener('jump-request', jump)
+      window.removeEventListener('ride-request', ride)
+      window.removeEventListener('unride-request', unride)
     }
   }, [])
 
@@ -202,6 +243,9 @@ export function Player() {
           p.sitting = true
           seatInfo.current = { idx: g.idx, stand: g.stand }
           useStore.getState().set({ sitting: g.idx })
+        } else if (g.then === 'ride') {
+          p.riding = true
+          useStore.getState().set({ riding: true })
         } else if (g.then === 'stand' && afterStand.current) {
           const t = afterStand.current
           afterStand.current = null
@@ -225,8 +269,9 @@ export function Player() {
       }
       if (vx || vz) {
         const len = Math.hypot(vx, vz)
-        vx = (vx / len) * SPEED * dt
-        vz = (vz / len) * SPEED * dt
+        const sp = p.riding ? RIDE_SPEED : SPEED
+        vx = (vx / len) * sp * dt
+        vz = (vz / len) * sp * dt
         if (isFree(p.x + vx, p.z)) p.x += vx
         if (isFree(p.x, p.z + vz)) p.z += vz
         p.rot = dampAngle(p.rot, Math.atan2(vx, vz), 14, dt)
@@ -236,7 +281,7 @@ export function Player() {
         const dx = tx - p.x
         const dz = tz - p.z
         const dist = Math.hypot(dx, dz)
-        const step = SPEED * dt
+        const step = (p.riding ? RIDE_SPEED : SPEED) * dt
         if (dist <= step) {
           p.x = tx
           p.z = tz
@@ -260,15 +305,24 @@ export function Player() {
       }
     }
 
+    // 🦘 점프 물리
+    if (p.y > 0 || p.vy > 0) {
+      p.vy -= GRAVITY * dt
+      p.y = Math.max(0, p.y + p.vy * dt)
+      if (p.y === 0) p.vy = 0
+    }
+    anim.current.air = p.y > 0.02
+
     p.moving = moving || !!glide.current
     anim.current.moving = p.moving && !p.sitting
-    anim.current.sitting = p.sitting || (glide.current && glide.current.then === 'sit' && false)
-    idle.current = p.moving || p.sitting ? 0 : idle.current + dt
+    anim.current.sitting = p.sitting || p.riding
+    idle.current = p.moving || p.sitting || p.riding ? 0 : idle.current + dt
     if (idle.current > 1.4 && !live.overview) p.rot = dampAngle(p.rot, 0, 3, dt)
     if (group.current) {
-      group.current.position.set(p.x, 0, p.z)
+      group.current.position.set(p.x, p.y, p.z)
       group.current.rotation.y = p.rot
     }
+    strollerAnim.current.moving = p.moving
 
     // 주변 상호작용 판정
     const st = useStore.getState()
@@ -279,6 +333,8 @@ export function Player() {
     st.setIf('nearTree', Math.hypot(p.x - TREE.x, p.z - TREE.z) < 1.7)
     st.setIf('nearCoffee', Math.hypot(p.x - COFFEE.x, p.z - COFFEE.z) < 1.35)
     st.setIf('nearDday', p.x > 20.2 && p.x < 23.4 && p.z < 2.7)
+    st.setIf('nearStroller', !p.riding && Math.hypot(p.x - STROLLER.x, p.z - STROLLER.z) < 1.5)
+    st.setIf('nearNiro', Math.hypot(p.x - NIRO.x, p.z - NIRO.z) < 1.6)
     st.setIf('nearModels', Math.abs(p.x - MODELS.x) < 1.6 && Math.abs(p.z - MODELS.z) < 2.6)
     let near = null
     if (!p.sitting && !glide.current) {
@@ -298,7 +354,16 @@ export function Player() {
   if (!me) return null
   return (
     <group ref={group}>
-      <Character anim={anim} shirt={me.shirt} hair={me.hair} pants={me.pants} holding={holding} accessory={accessory} />
+      {riding ? (
+        <>
+          <Stroller anim={strollerAnim} />
+          <group position={[0, 0.36, -0.06]} scale={0.72}>
+            <Character anim={anim} shirt={me.shirt} hair={me.hair} pants={me.pants} holding={holding} accessory={accessory} />
+          </group>
+        </>
+      ) : (
+        <Character anim={anim} shirt={me.shirt} hair={me.hair} pants={me.pants} holding={holding} accessory={accessory} />
+      )}
       <HeadOverlay name={me.name} title={me.title} bubble={bubble} emote={emote} mood={mood.e} status={`${status.e} ${status.l}`} mine />
     </group>
   )
@@ -317,7 +382,9 @@ const STATUS_LABEL = { '💻': '업무중', '☕': '탕비실', '🏗️': '현�
 export function RemotePlayer({ r }) {
   const group = useRef()
   const anim = useRef({ moving: false, sitting: false })
+  const strollerAnim = useRef({ moving: false })
   const pos = useRef({ x: r.x, z: r.z, rot: r.rot })
+  const jumpSim = useRef({ y: 0, vy: 0, seen: r.jp }) // 점프는 신호를 받으면 내 화면에서 같은 궤적으로 재생 (부드럽게)
   const [bubble, setBubble] = useState(null)
   const [, force] = useState(0)
   useEffect(() => {
@@ -337,17 +404,39 @@ export function RemotePlayer({ r }) {
     p.x = THREE.MathUtils.damp(p.x, r.x, 10, dt)
     p.z = THREE.MathUtils.damp(p.z, r.z, 10, dt)
     p.rot = dampAngle(p.rot, r.rot, 10, dt)
-    anim.current.moving = r.moving && !r.sitting
-    anim.current.sitting = r.sitting
+    // 🦘 점프
+    const j = jumpSim.current
+    if (r.jp !== j.seen) {
+      j.seen = r.jp
+      if (j.y <= 0.001) j.vy = JUMP_V
+    }
+    if (j.y > 0 || j.vy > 0) {
+      j.vy -= GRAVITY * Math.min(dt, 0.05)
+      j.y = Math.max(0, j.y + j.vy * Math.min(dt, 0.05))
+      if (j.y === 0) j.vy = 0
+    } else if (r.y > 0.05) j.y = THREE.MathUtils.damp(j.y, r.y, 14, dt) // 신호를 놓친 경우 높이값으로 보정
+    anim.current.moving = r.moving && !r.sitting && !r.riding
+    anim.current.sitting = r.sitting || r.riding
+    anim.current.air = j.y > 0.02
+    strollerAnim.current.moving = r.moving
     if (group.current) {
-      group.current.position.set(p.x, 0, p.z)
+      group.current.position.set(p.x, j.y, p.z)
       group.current.rotation.y = p.rot
     }
   })
   const statusText = r.status ? `${r.status} ${STATUS_LABEL[r.status] || ''}`.trim() : null
   return (
     <group ref={group}>
-      <Character anim={anim} shirt={r.shirt} hair={r.hair} pants={r.pants} holding={r.holding} accessory={r.accessory} />
+      {r.riding ? (
+        <>
+          <Stroller anim={strollerAnim} />
+          <group position={[0, 0.36, -0.06]} scale={0.72}>
+            <Character anim={anim} shirt={r.shirt} hair={r.hair} pants={r.pants} holding={r.holding} accessory={r.accessory} />
+          </group>
+        </>
+      ) : (
+        <Character anim={anim} shirt={r.shirt} hair={r.hair} pants={r.pants} holding={r.holding} accessory={r.accessory} />
+      )}
       <HeadOverlay name={r.name} title={r.title} bubble={bubble} emote={emote} mood={r.mood} status={statusText} />
     </group>
   )

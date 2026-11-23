@@ -20,24 +20,28 @@ export default function Character({ anim, shirt = '#a8d0e6', pants = '#2f3e55', 
   const phase = useRef(0)
   const amt = useRef(0)
   const sit = useRef(0)
+  const air = useRef(0)
 
   useFrame((_, dt) => {
     const moving = anim.current?.moving
     const sitting = anim.current?.sitting
     amt.current = THREE.MathUtils.damp(amt.current, moving ? 1 : 0, 10, dt)
     sit.current = THREE.MathUtils.damp(sit.current, sitting ? 1 : 0, 9, dt)
+    air.current = THREE.MathUtils.damp(air.current, anim.current?.air ? 1 : 0, 16, dt) // 🦘 공중 자세
     phase.current += dt * (moving ? 11 : 2)
     const s = Math.sin(phase.current) * amt.current
     const k = sit.current
     // 앉기: 허벅지를 앞으로 접고 팔은 키보드 위로
     const typing = sitting && !moving ? Math.sin(phase.current * 6) * 0.06 : 0
-    if (legL.current) legL.current.rotation.x = s * 0.7 * (1 - k) - 1.45 * k
-    if (legR.current) legR.current.rotation.x = -s * 0.7 * (1 - k) - 1.45 * k
+    const a = air.current * (1 - k)
+    if (legL.current) legL.current.rotation.x = s * 0.7 * (1 - k) * (1 - a) - 1.45 * k - 0.55 * a
+    if (legR.current) legR.current.rotation.x = -s * 0.7 * (1 - k) * (1 - a) - 1.45 * k + 0.35 * a
     if (legL.current) legL.current.rotation.z = 0.08 * k
     if (legR.current) legR.current.rotation.z = -0.08 * k
-    if (armL.current) armL.current.rotation.x = -s * 0.6 * (1 - k) + (-0.85 + typing) * k
+    if (armL.current) armL.current.rotation.x = (-s * 0.6 * (1 - k) + (-0.85 + typing) * k) * (1 - a) - 2.6 * a
+    if (armL.current) armL.current.rotation.z = -0.35 * a
     if (armR.current) {
-      const target = holding ? -1.25 : s * 0.6 * (1 - k) + (-0.85 - typing) * k
+      const target = holding ? -1.25 : (s * 0.6 * (1 - k) + (-0.85 - typing) * k) * (1 - a) - 2.6 * a
       armR.current.rotation.x = THREE.MathUtils.damp(armR.current.rotation.x, target, 12, dt)
     }
     if (body.current)

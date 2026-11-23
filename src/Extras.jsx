@@ -857,8 +857,10 @@ function snowTexture() {
   return new THREE.CanvasTexture(c)
 }
 
-export function Snow({ W, D }) {
+export function Snow({ W, D, active = true }) {
   const timeMode = useStore((s) => s.timeMode)
+  const fade = useRef(active ? 1 : 0)
+  const pts = useRef()
   // 북쪽 창밖(넓게) + 남쪽 출입구 밖
   const AREAS = useMemo(
     () => [
@@ -892,6 +894,7 @@ export function Snow({ W, D }) {
   useFrame(({ clock }, rawDt) => {
     const dt = Math.min(rawDt, 0.05)
     const t = clock.elapsedTime
+    if (!active && fade.current < 0.01) return
     for (let i = 0; i < total; i++) {
       let y = pos[i * 3 + 1] - meta[i * 4] * dt
       if (y < 0) y += 7
@@ -899,10 +902,13 @@ export function Snow({ W, D }) {
       pos[i * 3] = meta[i * 4 + 3] + Math.sin(t * 0.7 + meta[i * 4 + 1]) * 0.25
     }
     if (geo.current) geo.current.attributes.position.needsUpdate = true
-    if (mat.current) mat.current.opacity = timeMode === 'night' ? 0.95 : timeMode === 'sunset' ? 0.85 : 0.7
+    // 과천 날씨가 눈이 아니면 천천히 사라짐
+    fade.current = THREE.MathUtils.damp(fade.current, active ? 1 : 0, 1.5, dt)
+    if (pts.current) pts.current.visible = fade.current > 0.01
+    if (mat.current) mat.current.opacity = (timeMode === 'night' ? 0.95 : timeMode === 'sunset' ? 0.85 : 0.7) * fade.current
   })
   return (
-    <points frustumCulled={false}>
+    <points ref={pts} frustumCulled={false}>
       <bufferGeometry ref={geo}>
         <bufferAttribute attach="attributes-position" args={[pos, 3]} />
       </bufferGeometry>
@@ -1002,6 +1008,269 @@ export function DdayBoard({ x, z }) {
           <meshStandardMaterial color="#868e96" />
         </mesh>
       ))}
+    </group>
+  )
+}
+
+/* ───────── 🌧️ 창밖 빗줄기 ───────── */
+export function Rain({ W, D, active }) {
+  const timeMode = useStore((s) => s.timeMode)
+  const N = 1800
+  const LEN = 0.38
+  const { pos, meta } = useMemo(() => {
+    const pos = new Float32Array(N * 6)
+    const meta = new Float32Array(N * 3) // x, z, 속도
+    for (let i = 0; i < N; i++) {
+      const north = i < N * 0.7
+      const x = -3 + Math.random() * (W + 6)
+      const z = north ? -6 + Math.random() * 5.65 : D + 0.4 + Math.random() * 4.1
+      const y = Math.random() * 7
+      meta[i * 3] = x
+      meta[i * 3 + 1] = z
+      meta[i * 3 + 2] = 8 + Math.random() * 4
+      pos.set([x, y, z, x - 0.04, y - LEN, z], i * 6)
+    }
+    return { pos, meta }
+  }, [W, D])
+  const geo = useRef()
+  const mat = useRef()
+  const seg = useRef()
+  const fade = useRef(active ? 1 : 0)
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05)
+    fade.current = THREE.MathUtils.damp(fade.current, active ? 1 : 0, 1.5, dt)
+    if (seg.current) seg.current.visible = fade.current > 0.01
+    if (mat.current) mat.current.opacity = (timeMode === 'night' ? 0.55 : 0.42) * fade.current
+    if (fade.current < 0.01) return
+    for (let i = 0; i < N; i++) {
+      let y = pos[i * 6 + 1] - meta[i * 3 + 2] * dt
+      if (y < 0) y += 7
+      const x = meta[i * 3]
+      const z = meta[i * 3 + 1]
+      pos[i * 6] = x
+      pos[i * 6 + 1] = y
+      pos[i * 6 + 2] = z
+      pos[i * 6 + 3] = x - 0.05
+      pos[i * 6 + 4] = y - LEN
+      pos[i * 6 + 5] = z
+    }
+    if (geo.current) geo.current.attributes.position.needsUpdate = true
+  })
+  return (
+    <lineSegments ref={seg} frustumCulled={false}>
+      <bufferGeometry ref={geo}>
+        <bufferAttribute attach="attributes-position" args={[pos, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial ref={mat} color="#b8d4ea" transparent opacity={0.45} depthWrite={false} />
+    </lineSegments>
+  )
+}
+
+// 🌤️ 과천 실시간 날씨에 맞춰 눈/비 전환 (미리보기 우선)
+export function Weather3D({ W, D }) {
+  const weather = useStore((s) => s.weather)
+  const override = useStore((s) => s.weatherOverride)
+  const precip = override || (weather ? weather.precip : 'none')
+  return (
+    <>
+      <Snow W={W} D={D} active={precip === 'snow'} />
+      <Rain W={W} D={D} active={precip === 'rain'} />
+    </>
+  )
+}
+
+/* ───────── 🍼 유모차 ───────── */
+export function Stroller({ anim }) {
+  const wheels = useRef([])
+  const body = useRef()
+  useFrame(({ clock }, dt) => {
+    const moving = anim && anim.current && anim.current.moving
+    wheels.current.forEach((w) => w && moving && (w.rotation.x += dt * 9))
+    if (body.current) body.current.position.y = moving ? Math.abs(Math.sin(clock.elapsedTime * 14)) * 0.012 : 0
+  })
+  const pink = '#ffc9de'
+  const mint = '#c3fae8'
+  return (
+    <group>
+      {/* 바퀴 */}
+      {[
+        [-0.23, 0.27],
+        [0.23, 0.27],
+        [-0.23, -0.27],
+        [0.23, -0.27],
+      ].map(([x, z], i) => (
+        <group key={i} position={[x, 0.11, z]} ref={(g) => (wheels.current[i] = g)}>
+          <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.11, 0.11, 0.05, 18]} />
+            <meshStandardMaterial color="#343a40" roughness={0.6} />
+          </mesh>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.05, 0.05, 0.06, 12]} />
+            <meshStandardMaterial color="#f1f3f5" metalness={0.5} roughness={0.3} />
+          </mesh>
+        </group>
+      ))}
+      <group ref={body}>
+        {/* 프레임 */}
+        {[-0.21, 0.21].map((x) => (
+          <group key={x}>
+            <mesh position={[x, 0.22, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.014, 0.014, 0.6, 8]} />
+              <meshStandardMaterial color="#adb5bd" metalness={0.6} roughness={0.3} />
+            </mesh>
+            <mesh position={[x, 0.62, -0.38]} rotation={[0.5, 0, 0]}>
+              <cylinderGeometry args={[0.014, 0.014, 0.5, 8]} />
+              <meshStandardMaterial color="#adb5bd" metalness={0.6} roughness={0.3} />
+            </mesh>
+          </group>
+        ))}
+        {/* 손잡이 */}
+        <mesh position={[0, 0.84, -0.5]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.022, 0.022, 0.48, 10]} />
+          <meshStandardMaterial color="#495057" roughness={0.5} />
+        </mesh>
+        {/* 바구니(좌석) */}
+        <mesh position={[0, 0.4, 0]} castShadow>
+          <boxGeometry args={[0.48, 0.24, 0.58]} />
+          <meshStandardMaterial color={pink} roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 0.525, 0]}>
+          <boxGeometry args={[0.42, 0.02, 0.52]} />
+          <meshStandardMaterial color={mint} roughness={0.9} />
+        </mesh>
+        {[-0.24, 0.24].map((x) => (
+          <mesh key={x} position={[x, 0.53, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.03, 0.03, 0.6, 10]} />
+            <meshStandardMaterial color="#ffffff" roughness={0.8} />
+          </mesh>
+        ))}
+        {/* 차양 */}
+        <mesh position={[0, 0.55, -0.16]} rotation={[-0.25, 0, 0]}>
+          <sphereGeometry args={[0.27, 20, 12, Math.PI, Math.PI, 0, Math.PI / 2]} />
+          <meshStandardMaterial color="#f783ac" roughness={0.7} side={THREE.DoubleSide} />
+        </mesh>
+        {/* 매달린 별 장난감 */}
+        <mesh position={[0, 0.74, 0.02]}>
+          <octahedronGeometry args={[0.035]} />
+          <meshStandardMaterial color="#ffd43b" emissive="#ffd43b" emissiveIntensity={0.4} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+// 주차된 유모차 (아무도 타지 않을 때만 보임)
+export function HomeStroller({ x, z, rot }) {
+  const riding = useStore((s) => s.riding)
+  const remoteRiding = useStore((s) => Object.values(s.remotes).some((r) => r.riding))
+  const label = useMemo(
+    () =>
+      makeTex(512, 110, (g) => {
+        g.fillStyle = 'rgba(255,240,246,0.95)'
+        g.beginPath()
+        g.roundRect(4, 4, 504, 102, 50)
+        g.fill()
+        g.strokeStyle = '#f783ac'
+        g.lineWidth = 5
+        g.stroke()
+        g.fillStyle = '#c2255c'
+        g.font = `800 46px ${FONT}`
+        g.textAlign = 'center'
+        g.textBaseline = 'middle'
+        g.fillText('🍼 하린이 전용 유모차', 256, 58)
+      }),
+    []
+  )
+  if (riding || remoteRiding) return null
+  return (
+    <group position={[x, 0, z]} rotation={[0, rot, 0]}>
+      <Stroller />
+      <sprite position={[0, 1.25, 0]} scale={[0.95, 0.2, 1]}>
+        <spriteMaterial map={label} transparent />
+      </sprite>
+    </group>
+  )
+}
+
+/* ───────── 🚗 니로 운행일지 키박스 (주출입구 옆) ───────── */
+export function NiroKiosk({ x, z }) {
+  const keyRef = useRef()
+  const face = useMemo(
+    () =>
+      makeTex(512, 640, (g) => {
+        g.fillStyle = '#1c2a3a'
+        g.fillRect(0, 0, 512, 640)
+        g.fillStyle = '#3bc9db'
+        g.fillRect(0, 0, 512, 120)
+        g.fillStyle = '#0b1724'
+        g.font = `900 64px ${FONT}`
+        g.textBaseline = 'middle'
+        g.textAlign = 'center'
+        g.fillText('🚗 NIRO', 256, 64)
+        g.fillStyle = '#ffffff'
+        g.font = `800 52px ${FONT}`
+        g.fillText('법인차량', 256, 190)
+        g.fillText('운행일지', 256, 252)
+        g.fillStyle = '#ffd43b'
+        g.font = `700 34px ${FONT}`
+        g.fillText('🔑 키 보관함', 256, 330)
+        // 키 고리 자리
+        for (let i = 0; i < 3; i++) {
+          g.fillStyle = '#495057'
+          g.beginPath()
+          g.arc(146 + i * 110, 410, 12, 0, Math.PI * 2)
+          g.fill()
+        }
+        g.fillStyle = '#adb5bd'
+        g.font = `600 28px ${FONT}`
+        g.fillText('운행 전·후 꼭 기록해 주세요', 256, 560)
+        g.fillText('클릭 또는 가까이 와서 [운행일지]', 256, 602)
+      }),
+    []
+  )
+  useFrame(({ clock }) => {
+    if (keyRef.current) keyRef.current.rotation.z = Math.sin(clock.elapsedTime * 1.6) * 0.18
+  })
+  const open = (e) => {
+    e.stopPropagation()
+    if (useStore.getState().joined) useStore.getState().set({ modal: 'niro' })
+  }
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, 0.03, 0]} receiveShadow>
+        <boxGeometry args={[0.5, 0.06, 0.3]} />
+        <meshStandardMaterial color="#343a40" />
+      </mesh>
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <boxGeometry args={[0.07, 1.0, 0.07]} />
+        <meshStandardMaterial color="#868e96" metalness={0.5} roughness={0.3} />
+      </mesh>
+      <group position={[0, 1.38, 0.02]} rotation={[-0.12, 0, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[0.56, 0.7, 0.06]} />
+          <meshStandardMaterial color="#212529" roughness={0.5} />
+        </mesh>
+        <mesh
+          position={[0, 0, 0.032]}
+          onClick={open}
+          onPointerOver={() => (document.body.style.cursor = 'pointer')}
+          onPointerOut={() => (document.body.style.cursor = '')}
+        >
+          <planeGeometry args={[0.5, 0.625]} />
+          <meshBasicMaterial map={face} toneMapped={false} />
+        </mesh>
+        {/* 흔들리는 자동차 키 */}
+        <group ref={keyRef} position={[0.0, -0.05, 0.05]}>
+          <mesh position={[0, -0.03, 0]}>
+            <torusGeometry args={[0.018, 0.005, 6, 14]} />
+            <meshStandardMaterial color="#ced4da" metalness={0.8} roughness={0.2} />
+          </mesh>
+          <mesh position={[0, -0.08, 0]}>
+            <boxGeometry args={[0.04, 0.06, 0.018]} />
+            <meshStandardMaterial color="#111" roughness={0.4} />
+          </mesh>
+        </group>
+      </group>
     </group>
   )
 }

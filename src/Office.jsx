@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { walls, seats, roomLabels, W, D, WALL_H } from './layout'
-import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame, Garlands, Wreath, Snow, DdayBoard } from './Extras'
-import { TREE, COFFEE, DDAY } from './furniture'
+import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame, Garlands, Wreath, Weather3D, DdayBoard, HomeStroller, NiroKiosk } from './Extras'
+import { TREE, COFFEE, DDAY, STROLLER, NIRO } from './furniture'
 import { STORIES, todayStoryIndex } from './stories'
 import { lampMats, glowMat } from './Ambience'
 import { furniture } from './furniture'
@@ -947,7 +947,11 @@ export default function Office() {
       <Wreath p={[7.85, 1.65, D + 0.14]} />
       <Wreath p={[4.79, 1.75, 4.75]} ry={Math.PI / 2} />
       <Wreath p={[25.8, 1.7, 7.79]} s={0.8} />
-      <Snow W={W} D={D} />
+      {/* 🌤️ 과천 실시간 날씨: 눈/비 */}
+      <Weather3D W={W} D={D} />
+      {/* 🍼 하린이 유모차 · 🚗 니로 키박스 */}
+      <HomeStroller x={STROLLER.x} z={STROLLER.z} rot={STROLLER.rot} />
+      <NiroKiosk x={NIRO.x} z={NIRO.z} />
       {/* 📅 관리부 북쪽 창가 전광판 */}
       <DdayBoard x={DDAY.x} z={DDAY.z} />
       {/* 🏛️ 탕비실 북쪽 벽 액자 */}

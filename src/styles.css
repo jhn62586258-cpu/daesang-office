@@ -718,3 +718,96 @@ kbd {
 @keyframes riseUp { from { transform: translateY(20px); opacity: 0; } }
 .act-group { max-width: none; }
 @media (max-width: 1100px) { .actions { left: 10px; right: 10px; top: 64px; bottom: auto; } }
+
+/* ════════ v6: 점프 · 유모차 · 과천 날씨 · 니로 운행일지 ════════ */
+.jump-btn {
+  position: fixed; right: 14px; bottom: 82px; z-index: 13; width: 64px; height: 64px; border-radius: 50%; border: 0;
+  background: linear-gradient(135deg, #74c0fc, #339af0); color: #fff; font-weight: 900; font-size: 12px; line-height: 1.15;
+  box-shadow: 0 5px 0 #1c7ed6, 0 10px 20px rgba(28,126,214,.3); touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.jump-btn span { display: block; font-size: 20px; }
+.jump-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #1c7ed6; }
+.b-ride { background: linear-gradient(135deg, #f783ac, #e64980); box-shadow: 0 4px 0 #a61e4d; }
+.b-niro { background: linear-gradient(135deg, #3bc9db, #1098ad); color: #0b1724; box-shadow: 0 4px 0 #0b7285; }
+.act-note { font-size: 12.5px; font-weight: 700; color: #a61e4d; padding: 0 8px; }
+.weather-pill {
+  border: 0; display: flex; align-items: center; gap: 6px; background: rgba(255,253,248,.95); border-radius: 12px; padding: 8px 12px;
+  font-weight: 800; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.1); color: #2b2a28;
+}
+.weather-pill .wp-temp { font-size: 15px; }
+.weather-pill small { font-weight: 700; color: #6d655a; }
+.weather-pill em { font-style: normal; font-size: 10.5px; background: #fff3bf; color: #a26b00; padding: 1px 6px; border-radius: 999px; }
+
+/* 니로 운행일지 */
+.niro-sheet { width: min(860px, 100%); }
+.niro-tabs { display: flex; gap: 4px; background: #f2ede4; border-radius: 12px; padding: 4px; margin: 6px 0 12px; }
+.niro-tabs button { flex: 1; border: 0; background: transparent; padding: 10px; border-radius: 9px; font-weight: 800; font-size: 14px; color: #7a7266; }
+.niro-tabs button.on { background: #fff; color: #0b7285; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.niro-tabs b { background: #0b7285; color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 999px; margin-left: 4px; }
+.niro-warn { background: #fff4e6; color: #a05a00; font-size: 12.5px; font-weight: 700; padding: 8px 12px; border-radius: 10px; margin-bottom: 10px; }
+.niro-done { background: #ebfbee; color: #2b8a3e; font-weight: 800; font-size: 13.5px; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; }
+.nf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.nf { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 800; color: #4b5563; min-width: 0; }
+.nf.wide { grid-column: 1 / -1; }
+.nf em { font-style: normal; font-weight: 700; color: #0b7285; font-size: 11px; }
+.nf input, .nf select {
+  font: inherit; font-size: 15px; font-weight: 600; color: #1b1f24; padding: 11px 12px; border-radius: 11px; border: 1.5px solid #e2dacd;
+  background: #fff; outline: none; width: 100%; min-width: 0;
+}
+.nf input:focus, .nf select:focus { border-color: #15aabf; }
+.nf-row { display: flex; gap: 6px; }
+.now-btn { border: 0; background: #0b7285; color: #fff; font-weight: 800; border-radius: 11px; padding: 0 14px; font-size: 13px; white-space: nowrap; }
+.nf .chips { margin-top: 2px; }
+.nf .chip { cursor: pointer; font-family: inherit; }
+.nf-distance { background: #e3fafc; color: #0b7285; font-size: 20px; font-weight: 900; padding: 10px 14px; border-radius: 11px; }
+.nf-distance.bad { background: #fff5f5; color: #c92a2a; font-size: 14px; }
+.fuel-seg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.fuel-seg button { border: 1.5px solid #e2dacd; background: #fff; border-radius: 11px; padding: 11px 4px; font-weight: 800; font-size: 14px; color: #495057; }
+.fuel-seg button.on { border-color: #15aabf; background: #e3fafc; color: #0b7285; }
+.fuel-seg button.warn.on { border-color: #fa5252; background: #fff5f5; color: #c92a2a; }
+.sign-wrap { position: relative; }
+.sign-pad { display: block; width: 100%; height: 150px; border-radius: 12px; border: 2px dashed #ced4da; background: #fff; touch-action: none; cursor: crosshair; }
+.sign-ph { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; color: #adb5bd; font-weight: 600; font-size: 13px; pointer-events: none; }
+.sign-clear { position: absolute; right: 8px; top: 8px; border: 0; background: #f1f3f5; border-radius: 8px; padding: 5px 10px; font-weight: 800; font-size: 12px; color: #495057; }
+.niro-form .go { width: 100%; margin-top: 14px; background: linear-gradient(135deg, #3bc9db, #1098ad); color: #062a33; box-shadow: 0 6px 16px rgba(16,152,173,.3); }
+.niro-form .err { margin-top: 10px; }
+.nl-summary { display: flex; gap: 10px; align-items: center; background: #f8f4ec; border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; flex-wrap: wrap; }
+.nl-summary > div { display: flex; flex-direction: column; margin-right: 16px; }
+.nl-summary small { font-size: 11px; color: #8a8174; font-weight: 700; }
+.nl-summary b { font-size: 16px; }
+.nl-summary .go { margin-left: auto; }
+.nl-table-wrap { overflow-x: auto; max-height: 52vh; overflow-y: auto; border: 1px solid #ece5d9; border-radius: 12px; }
+.nl-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 720px; }
+.nl-table th { position: sticky; top: 0; background: #f1f3f5; text-align: left; padding: 8px; font-size: 11.5px; color: #495057; white-space: nowrap; }
+.nl-table td { padding: 8px; border-top: 1px solid #f1ebe1; vertical-align: middle; white-space: nowrap; }
+.nl-table td small { color: #8a8174; }
+.nl-table .b { font-weight: 800; }
+.nl-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fuel-tag { background: #e3fafc; color: #0b7285; font-weight: 800; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; }
+.fuel-tag.warn { background: #fff5f5; color: #c92a2a; }
+.sign-thumb { height: 26px; background: #fff; border: 1px solid #e9ecef; border-radius: 4px; cursor: zoom-in; }
+.nl-del { border: 0; background: transparent; font-size: 14px; }
+.nl-note { font-size: 11.5px; color: #868e96; margin: 8px 0 0; }
+.niro-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 300; display: grid; place-items: center; padding: 16px; }
+.niro-pop { background: #fff; border-radius: 16px; padding: 16px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.niro-pop img { width: 100%; border: 1px solid #e9ecef; border-radius: 8px; }
+.niro-pop p { margin: 0; color: #495057; font-size: 13px; }
+
+/* ?niro=1 단독 화면 (모바일) */
+html.niro-page, html.niro-page body { overflow: auto; height: auto; min-height: 100%; }
+body.niro-page { background: #eef3f5; }
+body.niro-page #root { height: auto; min-height: 100%; overflow: visible; }
+.niro-app { max-width: 760px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom)); }
+.niro-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.nh-icon { width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(135deg, #3bc9db, #1098ad); display: grid; place-items: center; font-size: 28px; flex: none; }
+.niro-head h1 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+.niro-head p { margin: 2px 0 0; color: #6d655a; font-size: 13px; }
+.niro.standalone { background: #fff; border-radius: 20px; padding: 12px 14px 16px; box-shadow: 0 6px 24px rgba(0,0,0,.06); }
+.niro-foot { text-align: center; margin-top: 16px; }
+.niro-foot a { color: #0b7285; font-weight: 800; text-decoration: none; font-size: 14px; }
+@media (max-width: 600px) {
+  .nf-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .nf input, .nf select { font-size: 16px; } /* iOS 확대 방지 */
+  .fuel-seg { grid-template-columns: repeat(3, 1fr); }
+  .jump-btn { bottom: 20px; }
+}

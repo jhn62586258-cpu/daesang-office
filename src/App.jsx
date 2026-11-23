@@ -3,7 +3,8 @@ import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import Office from './Office'
 import { Player, RemotePlayer, ClickMarker, CameraRig } from './Player'
-import { EntryModal, ActionPanel, Modals, HUD, LunchAlerts, ConfirmDialog, CoffeeToasts } from './UI'
+import { EntryModal, ActionPanel, Modals, HUD, LunchAlerts, ConfirmDialog, CoffeeToasts, JumpButton } from './UI'
+import { initWeather } from './weather'
 import { Chat } from './ChatPanel'
 import { initNet } from './net'
 import { initData } from './notes'
@@ -28,6 +29,7 @@ export default function App() {
     initNet() // 캐릭터 위치·상태 (presence)
     initData() // 게시판·쪽지·보관함·간식 투표·룰렛 식당
     initChat() // 전체 채팅 + 그룹 채팅
+    initWeather() // 🌤️ 과천시 실시간 날씨
   }, [])
   return (
     <>
@@ -53,6 +55,7 @@ export default function App() {
       <LunchAlerts />
       <CoffeeToasts />
       <ActionPanel />
+      <JumpButton />
       <Modals />
       <EntryModal />
       <ConfirmDialog />

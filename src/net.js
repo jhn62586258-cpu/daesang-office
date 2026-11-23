@@ -88,7 +88,9 @@ function buildPresence() {
     pa: s.me.pants,
     hr: s.me.hair,
     x: Math.round(p.x * 100) / 100,
-    z: Math.round(p.z * 100) / 100,
+    y: Math.round((p.y || 0) * 100) / 100, // 🦘 점프 높이
+    jp: p.jumpCount || 0, // 🦘 점프 신호 (늘어날 때마다 상대 화면에서 점프 재생)
+    rd: p.riding ? 1 : 0, // 🍼 유모차 탑승 중
     r: Math.round(p.rot * 100) / 100,
     m: p.moving ? 1 : 0,
     si: p.sitting ? 1 : 0,
@@ -133,7 +135,10 @@ function applyPeer(id, pr) {
     pants: col(pr.pa, '#2f3e55'),
     hair: pr.hr === 'long' ? 'long' : 'short',
     x: num(pr.x, 23),
+    y: Math.max(0, Math.min(3, num(pr.y))),
     z: num(pr.z, 8.8),
+    jp: num(pr.jp),
+    riding: !!pr.rd,
     rot: num(pr.r),
     moving: !!pr.m,
     sitting: !!pr.si,

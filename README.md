@@ -53,6 +53,18 @@ git push -u origin main
 | `/tree_wishes/{id}` | 🎄 트리 소원 카드 (100자, 작성자만 삭제) |
 | `/project_dday/{id}` | 📅 프로젝트 마감 D-Day (관리부 전광판) |
 | `/archi_models/{id}` | 📐 진행 중인 프로젝트 안내 (회의 테이블 모형 전시대) |
+| `/niro_logs/{id}` | 🚗 니로 법인차량 운행일지 (서명 PNG 포함, 작성자 본인만 삭제) |
+
+## 🚗 니로 운행일지
+- 3D 사무실: 주출입구 옆 키박스를 클릭하거나 가까이 가서 [🚗 니로 운행일지]
+- 📱 모바일 전용 화면: `https://내사이트.vercel.app/?niro=1` (3D를 불러오지 않아 빠름 → 홈 화면에 추가 추천)
+- 📥 [전체 기록] 탭에서 엑셀(CSV) 다운로드
+- 구글 스프레드시트 자동 기록(선택): `docs/niro-apps-script.gs` 안내대로 Apps Script 웹 앱을 배포한 뒤
+  `src/config.js` 의 `NIRO_SHEET_WEBAPP_URL` 에 URL 입력 (또는 Vercel 환경변수 `VITE_NIRO_SHEET_URL`)
+
+## 🌤️ 과천시 실시간 날씨
+- [Open-Meteo](https://open-meteo.com) 무료 API (키 불필요) · 10분마다 갱신 · `src/weather.js`
+- 우측 상단 날씨 표시를 누르면 창밖 효과 미리보기: 실시간 → 눈 → 비 → 맑음
 
 > 새 버전으로 업데이트할 때는 **`database.rules.json`을 Firebase 콘솔 → Realtime Database → 규칙에 다시 붙여넣고 [게시]** 해야 새 기능이 저장됩니다.
 
@@ -74,6 +86,9 @@ git push -u origin main
    ├─ Office.jsx / Extras.jsx / Character.jsx / Player.jsx
    ├─ Ambience.jsx / music.js               ← KST 조명 · 크리스마스 캐롤 오르골 (Web Audio)
    ├─ stories.js                            ← 오늘의 건축 이야기 기본 10편
+   ├─ weather.js                            ← 과천시 실시간 날씨 (Open-Meteo)
+   ├─ niro.js / NiroLog.jsx / NiroApp.jsx   ← 니로 운행일지 (데이터 · 화면 · ?niro=1 단독 화면)
+   ├─ config.js                             ← 구글 시트 웹 앱 URL 등 추가 설정
    ├─ UI.jsx / styles.css / textures.js / restaurants.js
 ```
 

@@ -3,7 +3,7 @@ import { START } from './layout'
 
 // 매 프레임 바뀌는 값은 리렌더 없이 공유 (mutable)
 export const live = {
-  player: { x: START.x, z: START.z, rot: Math.PI, moving: false, sitting: false },
+  player: { x: START.x, z: START.z, rot: Math.PI, moving: false, sitting: false, y: 0, vy: 0, jumpCount: 0, riding: false },
   target: null, // 클릭 이동 목표 표시용
   overview: false,
   zoom: 1,
@@ -81,6 +81,12 @@ export const useStore = create((set, get) => ({
   nearCoffee: false,
   nearDday: false,
   nearModels: false,
+  nearStroller: false,
+  nearNiro: false,
+  riding: false, // 🍼 내가 유모차 탑승 중
+  weather: null, // 🌤️ 과천시 실시간 날씨 { temp, code, isDay, label, icon, precip, at }
+  weatherError: false,
+  weatherOverride: null, // 미리보기: null(실시간) | 'snow' | 'rain' | 'none'
   confirm: null, // 확인창 { title, body, okText, onOk }
 
   join: (me) => set({ me, joined: true }),
