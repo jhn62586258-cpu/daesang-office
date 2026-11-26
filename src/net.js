@@ -89,6 +89,7 @@ function buildPresence() {
     hr: s.me.hair,
     x: Math.round(p.x * 100) / 100,
     y: Math.round((p.y || 0) * 100) / 100, // 🦘 점프 높이
+    z: Math.round(p.z * 100) / 100,
     jp: p.jumpCount || 0, // 🦘 점프 신호 (늘어날 때마다 상대 화면에서 점프 재생)
     rd: p.riding ? 1 : 0, // 🍼 유모차 탑승 중
     r: Math.round(p.rot * 100) / 100,
@@ -100,6 +101,7 @@ function buildPresence() {
     st: s.status.e,
     sp: s.lastSpin,
     ac: s.accessory, // 🎅 산타 모자 / 🦌 루돌프 머리띠
+    og: s.status.e === '🚗' && s.outing ? { d: s.outing.dest, u: s.outing.until } : null, // 🚗 외근 행선지·복귀 시간
     cf: s.lastBrew, // ☕ 커피 뽑기 알림
   }
 }
@@ -147,6 +149,7 @@ function applyPeer(id, pr) {
     mood: str(pr.mo, 8),
     status: str(pr.st, 8),
     accessory: pr.ac === 'santa' || pr.ac === 'rudolph' ? pr.ac : null,
+    outing: pr.og && typeof pr.og.d === 'string' && pr.og.d ? { dest: str(pr.og.d, 20), until: /^\d{2}:\d{2}$/.test(pr.og.u || '') ? pr.og.u : '' } : null,
   })
 
   // ☕ 동료가 커피를 뽑음 → 1분 이내의 새 소식만 배너로

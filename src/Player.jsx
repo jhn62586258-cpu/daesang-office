@@ -6,7 +6,7 @@ import Character from './Character'
 import { live, useStore } from './store'
 import { isFree, findPath } from './nav'
 import { zoneAt, PANTRY, W, D, seats, chairOf, ROULETTE } from './layout'
-import { TREE, COFFEE, MODELS, STROLLER, NIRO } from './furniture'
+import { TREE, COFFEE, MODELS, STROLLER, NIRO, STORY, NOTION } from './furniture'
 import { Stroller } from './Extras'
 
 const SPEED = 3.6
@@ -30,7 +30,11 @@ const typing = () => {
   return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
 }
 
-export function HeadOverlay({ name, title, bubble, emote, mine, mood, status }) {
+// 🚗 외근 행선지 표시: '🚗 과천시청 (~15:30)'
+export const outingText = (o) => (o && o.dest ? `🚗 ${o.dest}${o.until ? ` (~${o.until})` : ''}` : '')
+
+export function HeadOverlay({ name, title, bubble, emote, mine, mood, status, outing }) {
+  const onVacation = useStore((s) => !!s.vacations[name])
   return (
     <Html position={[0, 2.05, 0]} center zIndexRange={[50, 0]} style={{ pointerEvents: 'none' }}>
       <div className="head-wrap">
@@ -54,6 +58,8 @@ export function HeadOverlay({ name, title, bubble, emote, mine, mood, status }) 
             <span className="e3">{emote.kind === 'coffee' ? '✨' : '😋'}</span>
           </div>
         )}
+        {outing && outing.dest && <div className="outing-bubble">{outingText(outing)}</div>}
+        {onVacation && <div className="vac-badge">🏖️ 휴가중</div>}
         <div className={'head-tag' + (mine ? ' mine' : '')}>
           {mood && <span className="mood">{mood}</span>}
           {name} <b>{title}</b>
@@ -65,7 +71,7 @@ export function HeadOverlay({ name, title, bubble, emote, mine, mood, status }) 
 }
 
 // 의자 뒤쪽의 비어 있는 '일어설 자리' 찾기
-function standSpotFor(idx) {
+export function standSpotFor(idx) {
   const c = chairOf(seats[idx])
   const back = [-c.dir[0], -c.dir[1]]
   const side = [c.dir[1], -c.dir[0]]
@@ -84,6 +90,7 @@ export function Player() {
   const accessory = useStore((s) => s.accessory)
   const mood = useStore((s) => s.mood)
   const status = useStore((s) => s.status)
+  const outing = useStore((s) => s.outing)
   const group = useRef()
   const anim = useRef({ moving: false, sitting: false })
   const path = useRef(null)
@@ -335,6 +342,8 @@ export function Player() {
     st.setIf('nearDday', p.x > 20.2 && p.x < 23.4 && p.z < 2.7)
     st.setIf('nearStroller', !p.riding && Math.hypot(p.x - STROLLER.x, p.z - STROLLER.z) < 1.5)
     st.setIf('nearNiro', Math.hypot(p.x - NIRO.x, p.z - NIRO.z) < 1.6)
+    st.setIf('nearStory', p.x > 24.5 && p.z < 3.2 && Math.abs(p.x - STORY.x) < 2.2)
+    st.setIf('nearNotion', Math.hypot(p.x - (NOTION.x + 0.75), p.z - NOTION.z) < 1.4)
     st.setIf('nearModels', Math.abs(p.x - MODELS.x) < 1.6 && Math.abs(p.z - MODELS.z) < 2.6)
     let near = null
     if (!p.sitting && !glide.current) {
@@ -364,7 +373,7 @@ export function Player() {
       ) : (
         <Character anim={anim} shirt={me.shirt} hair={me.hair} pants={me.pants} holding={holding} accessory={accessory} />
       )}
-      <HeadOverlay name={me.name} title={me.title} bubble={bubble} emote={emote} mood={mood.e} status={`${status.e} ${status.l}`} mine />
+      <HeadOverlay name={me.name} title={me.title} bubble={bubble} emote={emote} mood={mood.e} status={`${status.e} ${status.l}`} outing={status.e === '🚗' ? outing : null} mine />
     </group>
   )
 }
@@ -376,7 +385,7 @@ function dampAngle(a, b, lambda, dt) {
   return a + d * (1 - Math.exp(-lambda * dt))
 }
 
-const STATUS_LABEL = { '💻': '업무중', '☕': '탕비실', '🏗️': '현장외근', '🏃': '칼퇴대기' }
+const STATUS_LABEL = { '💻': '업무중', '☕': '탕비실', '🚗': '외근/현장', '🏗️': '외근/현장', '🏃': '칼퇴대기' }
 
 // 다른 동료 아바타
 export function RemotePlayer({ r }) {
@@ -437,7 +446,7 @@ export function RemotePlayer({ r }) {
       ) : (
         <Character anim={anim} shirt={r.shirt} hair={r.hair} pants={r.pants} holding={r.holding} accessory={r.accessory} />
       )}
-      <HeadOverlay name={r.name} title={r.title} bubble={bubble} emote={emote} mood={r.mood} status={statusText} />
+      <HeadOverlay name={r.name} title={r.title} bubble={bubble} emote={emote} mood={r.mood} status={statusText} outing={r.outing} />
     </group>
   )
 }

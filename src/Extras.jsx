@@ -328,18 +328,23 @@ export function Roulette3D() {
 }
 
 /* ───────── 책상 쪽지 (모니터 귀퉁이 포스트잇) ───────── */
+// 비밀 쪽지: 3D에는 내용 없이 아이콘만 (내용은 책상 주인만 팝업에서 확인)
 function deskNoteTexture(note) {
   return makeTex(192, 192, (g) => {
     g.fillStyle = note.color
     g.fillRect(0, 0, 192, 192)
     g.fillStyle = 'rgba(0,0,0,0.07)'
     g.fillRect(0, 0, 192, 26)
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.font = `900 70px ${FONT}`
+    g.fillText(note.kind === 'call' ? '📞' : '💌', 96, 86)
     g.fillStyle = '#2d2a26'
     g.font = `800 26px ${FONT}`
-    g.textBaseline = 'top'
-    g.fillText('💌', 12, 32)
-    g.font = `700 24px ${FONT}`
-    wrapText(g, note.text, 168, 4).forEach((l, i) => g.fillText(l, 12, 66 + i * 29))
+    g.fillText(note.kind === 'call' ? '부재중 전화' : '비밀 쪽지', 96, 146)
+    g.font = `700 20px ${FONT}`
+    g.fillStyle = 'rgba(45,42,38,0.6)'
+    g.fillText('🔒 본인만 확인', 96, 174)
   })
 }
 
@@ -350,7 +355,7 @@ const SLOTS = [
 ]
 
 function DeskNote({ note, pos, rotZ, seatRot }) {
-  const map = useMemo(() => deskNoteTexture(note), [note.id, note.text, note.color])
+  const map = useMemo(() => deskNoteTexture(note), [note.id, note.kind, note.color])
   useEffect(() => () => map.dispose(), [map])
   const ref = useRef()
   const hover = useRef(false)
@@ -659,29 +664,42 @@ export function XmasTree({ x, z }) {
   )
 }
 
-/* ───────── 🏛️ 오늘의 건축 이야기 액자 (탕비실 벽) ───────── */
+/* ───────── 🏛️ 오늘의 건축 이야기 보드 (다목적실 북쪽 벽, 기존 화이트보드 자리) ───────── */
 export function StoryFrame({ x, z, story }) {
+  const W = 2.4
+  const H = 1.5
   const map = useMemo(
     () =>
-      makeTex(640, 470, (g) => {
+      makeTex(1600, 1000, (g) => {
         g.fillStyle = '#fbf6ec'
-        g.fillRect(0, 0, 640, 470)
+        g.fillRect(0, 0, 1600, 1000)
         g.fillStyle = '#2f3e46'
-        g.fillRect(0, 0, 640, 92)
+        g.fillRect(0, 0, 1600, 170)
         g.fillStyle = '#ffd43b'
-        g.font = `800 46px ${FONT}`
+        g.font = `900 92px ${FONT}`
         g.textBaseline = 'middle'
-        g.fillText('🏛️ 오늘의 건축 이야기', 30, 48)
-        g.fillStyle = '#8a6d3b'
-        g.font = `700 30px ${FONT}`
+        g.fillText('🏛️ 오늘의 건축 이야기', 60, 88)
+        g.fillStyle = '#c9b28a'
+        g.font = `700 48px ${FONT}`
+        g.textAlign = 'right'
+        const kst = new Date(Date.now() + 9 * 3600 * 1000)
+        g.fillText(`${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`, 1540, 92)
+        g.textAlign = 'left'
         g.textBaseline = 'top'
-        g.fillText(`${story.who} · ${story.tag}`, 30, 118)
-        g.fillStyle = '#2b2a28'
-        g.font = `800 38px ${FONT}`
-        wrapText(g, story.quote, 580, 4).forEach((l, i) => g.fillText(l, 30, 170 + i * 52))
+        g.fillStyle = '#ae7a2c'
+        g.font = `800 60px ${FONT}`
+        g.fillText(`${story.who} · ${story.tag}`, 60, 220)
+        g.fillStyle = '#1f2326'
+        g.font = `900 84px ${FONT}`
+        const ql = wrapText(g, story.quote, 1480, 2)
+        ql.forEach((l, i) => g.fillText(l, 60, 310 + i * 104))
+        g.fillStyle = '#4b4740'
+        g.font = `500 50px ${FONT}`
+        const top = 330 + ql.length * 104
+        wrapText(g, story.body, 1480, Math.max(2, Math.floor((900 - top) / 66))).forEach((l, i) => g.fillText(l, 60, top + i * 66))
         g.fillStyle = '#9a9184'
-        g.font = `600 24px ${FONT}`
-        g.fillText('가까이 와서 [이야기 보기]를 눌러 보세요', 30, 420)
+        g.font = `600 38px ${FONT}`
+        g.fillText('가까이 와서 [🏛️ 오늘의 건축 이야기 보기] — 직원 공유 이야기도 함께 볼 수 있어요', 60, 935)
       }),
     [story]
   )
@@ -693,17 +711,21 @@ export function StoryFrame({ x, z, story }) {
   return (
     <group position={[x, 1.55, z]}>
       <mesh castShadow>
-        <boxGeometry args={[0.98, 0.76, 0.05]} />
+        <boxGeometry args={[W + 0.14, H + 0.14, 0.06]} />
         <meshStandardMaterial color="#8a5a35" roughness={0.55} />
       </mesh>
       <mesh
-        position={[0, 0, 0.027]}
+        position={[0, 0, 0.032]}
         onClick={open}
         onPointerOver={() => (document.body.style.cursor = 'pointer')}
         onPointerOut={() => (document.body.style.cursor = '')}
       >
-        <planeGeometry args={[0.86, 0.632]} />
-        <meshStandardMaterial map={map} roughness={0.8} emissive="#ffffff" emissiveMap={map} emissiveIntensity={0.12} />
+        <planeGeometry args={[W, H]} />
+        <meshBasicMaterial map={map} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, -H / 2 - 0.1, 0.06]}>
+        <boxGeometry args={[W * 0.9, 0.03, 0.09]} />
+        <meshStandardMaterial color="#9aa3a8" />
       </mesh>
     </group>
   )
@@ -1271,6 +1293,82 @@ export function NiroKiosk({ x, z }) {
           </mesh>
         </group>
       </group>
+    </group>
+  )
+}
+
+/* ───────── 📌 관리부 수납장 위 노션 사내 공지·서식함 ───────── */
+export function NotionSign({ x, z }) {
+  const url = useStore((s) => s.notionUrl)
+  const face = useMemo(
+    () =>
+      makeTex(640, 480, (g) => {
+        g.fillStyle = '#ffffff'
+        g.fillRect(0, 0, 640, 480)
+        g.fillStyle = '#191919'
+        g.fillRect(0, 0, 640, 120)
+        // 노션 로고 느낌의 N 박스
+        g.fillStyle = '#ffffff'
+        g.fillRect(34, 26, 70, 70)
+        g.fillStyle = '#191919'
+        g.font = `900 58px Georgia, serif`
+        g.textBaseline = 'middle'
+        g.fillText('N', 49, 64)
+        g.fillStyle = '#ffffff'
+        g.font = `800 46px ${FONT}`
+        g.fillText('Notion', 124, 62)
+        g.fillStyle = '#191919'
+        g.font = `900 62px ${FONT}`
+        g.fillText('📌 사내 공지', 40, 200)
+        g.fillText('& 서식함', 40, 280)
+        g.fillStyle = url ? '#2f9e44' : '#e8590c'
+        g.font = `700 32px ${FONT}`
+        g.fillText(url ? '● 클릭해서 노션 열기' : '● 링크 등록 필요 (관리부)', 40, 380)
+        g.fillStyle = '#868e96'
+        g.font = `600 26px ${FONT}`
+        g.fillText('공지사항 · 휴가/지출 서식 · 규정', 40, 432)
+      }),
+    [url]
+  )
+  useEffect(() => () => face.dispose(), [face])
+  const click = (e) => {
+    e.stopPropagation()
+    if (!useStore.getState().joined) return
+    // 가까이 걸어가면 하단에 [노션 열기] 버튼이 뜸
+    window.dispatchEvent(new CustomEvent('floor-click', { detail: { x: x + 0.75, z } }))
+  }
+  return (
+    <group position={[x, 1.0, z]} rotation={[0, Math.PI / 4, 0]}>
+      {/* 탁상용 A형 안내판 */}
+      <mesh position={[0, 0.23, -0.05]} rotation={[-0.22, 0, 0]} castShadow>
+        <boxGeometry args={[0.5, 0.42, 0.025]} />
+        <meshStandardMaterial color="#e9d8bd" roughness={0.6} />
+      </mesh>
+      <mesh
+        position={[0, 0.235, -0.032]}
+        rotation={[-0.22, 0, 0]}
+        onClick={click}
+        onPointerOver={() => (document.body.style.cursor = 'pointer')}
+        onPointerOut={() => (document.body.style.cursor = '')}
+      >
+        <planeGeometry args={[0.46, 0.345]} />
+        <meshBasicMaterial map={face} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.2, -0.16]} rotation={[0.3, 0, 0]}>
+        <boxGeometry args={[0.46, 0.38, 0.02]} />
+        <meshStandardMaterial color="#c9b28a" />
+      </mesh>
+      {/* 서식 파일꽂이 */}
+      <mesh position={[0.36, 0.09, -0.08]} castShadow>
+        <boxGeometry args={[0.16, 0.18, 0.22]} />
+        <meshStandardMaterial color="#343a40" />
+      </mesh>
+      {['#ffffff', '#ffe066', '#a5d8ff'].map((c, i) => (
+        <mesh key={c} position={[0.33 + i * 0.03, 0.2, -0.08]}>
+          <boxGeometry args={[0.006, 0.12, 0.2]} />
+          <meshStandardMaterial color={c} />
+        </mesh>
+      ))}
     </group>
   )
 }

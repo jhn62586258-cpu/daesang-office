@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { walls, seats, roomLabels, W, D, WALL_H } from './layout'
-import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame, Garlands, Wreath, Weather3D, DdayBoard, HomeStroller, NiroKiosk } from './Extras'
-import { TREE, COFFEE, DDAY, STROLLER, NIRO } from './furniture'
+import { Board3D, Roulette3D, DeskNotes3D, VoteBox3D, XmasTree, StoryFrame, Garlands, Wreath, Weather3D, DdayBoard, HomeStroller, NiroKiosk, NotionSign } from './Extras'
+import { TREE, DDAY, STROLLER, NIRO, STORY, NOTION } from './furniture'
 import { STORIES, todayStoryIndex } from './stories'
 import { lampMats, glowMat } from './Ambience'
 import { furniture } from './furniture'
@@ -276,8 +276,9 @@ function Monitor({ p, seed }) {
 function FloatingTag({ x, z, y = 2.05, name, title }) {
   const meName = useStore((s) => (s.me ? s.me.name : null))
   const count = useStore((s) => s.deskNotes.reduce((n, d) => n + (d.seat === name ? 1 : 0), 0))
+  const vacation = useStore((s) => !!s.vacations[name])
   const mine = meName === name
-  const map = useMemo(() => nameTagTexture(name, title, mine, count), [name, title, mine, count])
+  const map = useMemo(() => nameTagTexture(name, title, mine, count, vacation), [name, title, mine, count, vacation])
   useEffect(() => () => map.dispose(), [map])
   const ref = useRef()
   const phase = useMemo(() => Math.random() * 6, [])
@@ -795,19 +796,8 @@ function PantryCounter({ f }) {
           <meshStandardMaterial color="#c9ced2" metalness={0.9} roughness={0.2} />
         </mesh>
       </group>
-      {/* 커피머신 — 클릭하면 앞으로 걸어감 */}
-      <group
-        position={[0.15, 0.9, 0.02]}
-        onClick={(e) => {
-          e.stopPropagation()
-          if (!useStore.getState().joined) return
-          window.dispatchEvent(new CustomEvent('floor-click', { detail: { x: COFFEE.x, z: COFFEE.z } }))
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation()
-          document.body.style.cursor = 'pointer'
-        }}
-        onPointerOut={() => (document.body.style.cursor = '')}
+      {/* 커피머신 */}
+      <group position={[0.15, 0.9, 0.02]}> (document.body.style.cursor = '')}
       >
         <Box p={[0, 0.2, 0]} s={[0.32, 0.4, 0.36]} c="#2b2d2f" />
         <Box p={[0, 0.42, 0]} s={[0.34, 0.04, 0.38]} c="#b0b6ba" />
@@ -954,8 +944,10 @@ export default function Office() {
       <NiroKiosk x={NIRO.x} z={NIRO.z} />
       {/* 📅 관리부 북쪽 창가 전광판 */}
       <DdayBoard x={DDAY.x} z={DDAY.z} />
-      {/* 🏛️ 탕비실 북쪽 벽 액자 */}
-      <StoryFrame x={26.55} z={7.765} story={STORIES[todayStoryIndex()]} />
+      {/* 🏛️ 다목적실 북쪽 벽 (기존 화이트보드 자리) */}
+      <StoryFrame x={STORY.x} z={STORY.z} story={STORIES[todayStoryIndex()]} />
+      {/* 📌 관리부 수납장 위 노션 공지·서식함 */}
+      <NotionSign x={NOTION.x} z={NOTION.z} />
     </group>
   )
 }

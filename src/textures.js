@@ -142,7 +142,7 @@ export function labelTexture(text, big) {
 }
 
 // 떠 있는 직원 이름표
-export function nameTagTexture(name, title, mine, count = 0) {
+export function nameTagTexture(name, title, mine, count = 0, vacation = false) {
   const [c, g] = canvas(640, 220)
   const accent = mine ? '#f2a516' : '#3c6e71'
   g.shadowColor = 'rgba(0,0,0,0.25)'
@@ -174,6 +174,21 @@ export function nameTagTexture(name, title, mine, count = 0) {
   g.font = `600 60px ${FONT}`
   g.fillStyle = accent
   g.fillText(title, sx + nameW + 22, 106)
+  if (vacation) {
+    // 🏖️ 휴가중 배지
+    roundRect(g, 4, 0, 230, 70, 35)
+    g.fillStyle = '#ff922b'
+    g.fill()
+    g.strokeStyle = '#fff'
+    g.lineWidth = 5
+    g.stroke()
+    g.fillStyle = '#fff'
+    g.font = `900 40px ${FONT}`
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.fillText('🏖️ 휴가중', 119, 37)
+    g.textAlign = 'left'
+  }
   if (count > 0) {
     // 쪽지 알림 배지
     roundRect(g, 440, 0, 196, 84, 42)

@@ -9,8 +9,11 @@
 //   /tree_wishes/{id}             🎄 트리 소원 카드 (작성자 본인만 삭제)
 //   /project_dday/{id}            📅 프로젝트 마감 D-Day
 //   /archi_models/{id}            📐 진행 중인 프로젝트 안내 (모형 전시대)
+//   /office_notion_url            📌 노션 사내 공지·서식함 링크 (관리부가 화면에서 수정)
+//   /vacation_status/{직원이름}    🏖️ 휴가중 표시 (관리부가 체크)
 import { useStore, uid } from './store'
 import { dbOn, dbSet, dbRemove, myUid, isFirebase, dbReady } from './db'
+import { NOTION_URL } from './config'
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 const s = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '')
@@ -29,6 +32,9 @@ function cleanNote(id, d) {
     authorId: s(d.authorId, 40),
     tilt: typeof d.tilt === 'number' ? Math.max(-0.2, Math.min(0.2, d.tilt)) : 0,
     seat: s(d.seat, 10),
+    kind: d.kind === 'call' ? 'call' : 'note', // 💬 일반 쪽지 / 📞 부재중 전화 메모
+    caller: s(d.caller, 20),
+    phone: s(d.phone, 20),
     checkedAt: n0(d.checkedAt),
     checkedBy: s(d.checkedBy, 20),
   }
@@ -103,6 +109,16 @@ export async function initData() {
         .sort((a, b) => a.at - b.at),
     })
   )
+  useStore.getState().set({ notionUrl: NOTION_URL })
+  dbOn('office_notion_url', (v) => {
+    const url = v && typeof v.url === 'string' && /^https:\/\//.test(v.url) ? v.url.slice(0, 500) : ''
+    useStore.getState().set({ notionUrl: url || NOTION_URL })
+  })
+  dbOn('vacation_status', (v) => {
+    const out = {}
+    for (const [k, d] of Object.entries(v || {})) if (d && typeof d === 'object') out[k] = { by: s(d.by, 20), at: n0(d.at) }
+    useStore.getState().set({ vacations: out })
+  })
   dbOn('custom_restaurants', (v) =>
     useStore.getState().set({
       customRestaurants: toList(v, (k, d) => (d && typeof d === 'object' ? { id: k, name: s(d.name, 30), by: s(d.by, 20), at: n0(d.at) } : null)).reverse(),
@@ -129,12 +145,15 @@ export const deleteNote = (note) => dbRemove(`board_notes/${note.id}`)
 export const noteAuthor = (n) => (n.anon || !n.name ? '익명' : `${n.name} ${n.title}`.trim())
 
 /* ───────── 책상 쪽지 + 보관함 ───────── */
-export async function addDeskNote({ seat, text, color }) {
+export async function addDeskNote({ seat, text, color, kind = 'note', caller = '', phone = '' }) {
   const me = useStore.getState().me
   const id = 'd' + Date.now().toString(36) + uid()
   await dbSet(`desk_notes/${id}`, {
     seat,
-    text: text.slice(0, 50),
+    kind: kind === 'call' ? 'call' : 'note',
+    caller: caller.trim().slice(0, 20),
+    phone: phone.trim().slice(0, 20),
+    text: text.slice(0, 80),
     color,
     name: me.name,
     title: me.title,
@@ -152,6 +171,7 @@ export async function archiveDeskNote(note) {
   await dbRemove(`desk_notes/${id}`)
 }
 export const deleteArchived = (note) => dbRemove(`desk_notes_archive/${note.id}`)
+export const removeDeskNote = (note) => dbRemove(`desk_notes/${note.id}`)
 
 /* ───────── 간식 투표 ───────── */
 export const SNACKS = [
@@ -256,3 +276,16 @@ export async function saveModel({ id, title, desc, url, at }) {
   await dbSet(`archi_models/${key}`, { title: title.trim().slice(0, 40), desc: (desc || '').trim().slice(0, 300), url: link, by: `${me.name} ${me.title}`, at: at || Date.now(), updatedAt: Date.now() })
 }
 export const removeModel = (m) => dbRemove(`archi_models/${m.id}`)
+
+/* ───────── 📌 노션 링크 (관리부) ───────── */
+export async function saveNotionUrl(url) {
+  const me = useStore.getState().me
+  await dbSet('office_notion_url', { url: url.trim().slice(0, 500), by: `${me.name} ${me.title}`, at: Date.now() })
+}
+
+/* ───────── 🏖️ 직원 휴가 (관리부) ───────── */
+export async function setVacation(name, on) {
+  const me = useStore.getState().me
+  if (on) await dbSet(`vacation_status/${name}`, { on: true, by: `${me.name} ${me.title}`, at: Date.now() })
+  else await dbRemove(`vacation_status/${name}`)
+}

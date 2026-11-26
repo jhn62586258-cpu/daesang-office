@@ -20,7 +20,7 @@ export const MOODS = [
 export const STATUSES = [
   { e: '💻', l: '업무중' },
   { e: '☕', l: '탕비실' },
-  { e: '🏗️', l: '현장외근' },
+  { e: '🚗', l: '외근/현장' },
   { e: '🏃', l: '칼퇴대기' },
 ]
 
@@ -82,6 +82,18 @@ export const useStore = create((set, get) => ({
   nearDday: false,
   nearModels: false,
   nearStroller: false,
+  nearStory: false,
+  nearNotion: false,
+  notionUrl: '', // 📌 노션 사내 공지·서식함 링크 (Firebase /office_notion_url)
+  vacations: {}, // 🏖️ { 직원이름: { by, at } } (Firebase /vacation_status)
+  outing: (() => {
+    try {
+      const o = JSON.parse(localStorage.getItem('archi-office-3d-outing') || 'null')
+      return o && typeof o.dest === 'string' ? o : null
+    } catch {
+      return null
+    }
+  })(), // 🚗 외근/현장 { dest: '과천시청', until: '15:30' }
   nearNiro: false,
   riding: false, // 🍼 내가 유모차 탑승 중
   weather: null, // 🌤️ 과천시 실시간 날씨 { temp, code, isDay, label, icon, precip, at }

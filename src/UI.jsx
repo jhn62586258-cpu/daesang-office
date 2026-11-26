@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { seats } from './layout'
+import { seats, zoneAt as zoneAtPos } from './layout'
 import { live, useStore, MOODS, STATUSES, fmtTime, uid } from './store'
 import {
   addNote,
@@ -8,6 +8,9 @@ import {
   addDeskNote,
   archiveDeskNote,
   deleteArchived,
+  saveNotionUrl,
+  setVacation,
+  removeDeskNote,
   snackList,
   castVote,
   tally,
@@ -28,7 +31,9 @@ import {
   removeModel,
 } from './notes'
 import { COFFEE } from './furniture'
-import { canRide } from './Player'
+import { isAdminDept, seatOf, ADMIN_ONLY_MSG } from './roles'
+import { live as liveState } from './store'
+import { canRide, standSpotFor, outingText } from './Player'
 import NiroLog from './NiroLog'
 import { cycleWeatherPreview } from './weather'
 import { STORIES, todayStoryIndex } from './stories'
@@ -56,6 +61,14 @@ const NOTE_COLORS = [
   { c: '#ffd8a8', n: '주황' },
   { c: '#e5dbff', n: '라벤더' },
 ]
+
+function loadOutfit() {
+  try {
+    return JSON.parse(localStorage.getItem('archi-office-3d-outfit') || '{}') || {}
+  } catch {
+    return {}
+  }
+}
 
 function persistentId() {
   try {
@@ -134,6 +147,35 @@ export function EntryModal() {
     for (const s of seats) (g[s.dept] ||= []).push(s)
     return g
   }, [])
+  // 🔗 ?user=이름 → 선택 창 없이 내 자리에서 바로 입장
+  const [urlNotice, setUrlNotice] = useState('')
+  useEffect(() => {
+    if (useStore.getState().joined) return
+    let q = ''
+    try {
+      q = (new URLSearchParams(window.location.search).get('user') || '').trim()
+    } catch {}
+    if (!q) return
+    const idx = seats.findIndex((st) => st.name === q)
+    if (idx < 0) {
+      setUrlNotice(`'${q.slice(0, 12)}' 님을 직원 명단에서 찾지 못했어요. 아래에서 직접 선택해 주세요.`)
+      return
+    }
+    const st = seats[idx]
+    const o = loadOutfit()
+    const spot = standSpotFor(idx)
+    Object.assign(liveState.player, { x: spot.x, z: spot.z, rot: Math.PI })
+    useStore.getState().join({ id: persistentId(), name: st.name, title: st.title, shirt: o.shirt || SHIRTS[0].c, pants: o.pants || PANTS[0], hair: o.hair || 'short' })
+    sysMsg(`${st.name} ${st.title}님이 출근했습니다. ☀️`)
+    // 3D 장면(캐릭터)이 준비될 때까지 몇 번 재시도해서 내 자리에 앉기
+    let tries = 0
+    const trySit = () => {
+      if (useStore.getState().sitting !== null || tries++ > 20) return
+      window.dispatchEvent(new CustomEvent('sit-request', { detail: { idx } }))
+      setTimeout(trySit, 500)
+    }
+    setTimeout(trySit, 600)
+  }, [])
   if (joined) return null
 
   const submit = (e) => {
@@ -147,6 +189,9 @@ export function EntryModal() {
       if (n.length > 8) return setErr('이름은 8자 이내로 입력해 주세요.')
     }
     const me = { id: persistentId(), name: n, title: t, shirt, pants, hair }
+    try {
+      localStorage.setItem('archi-office-3d-outfit', JSON.stringify({ shirt, pants, hair }))
+    } catch {}
     useStore.getState().join(me)
     sysMsg(`${n} ${t}님이 출근했습니다. ☀️`)
   }
@@ -162,6 +207,7 @@ export function EntryModal() {
             <p>{today} · 오늘도 좋은 하루 보내세요!</p>
           </div>
         </div>
+        {urlNotice && <div className="url-notice">🔗 {urlNotice}</div>}
         <div className="tabs">
           <button type="button" className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')}>
             직원 목록에서 선택
@@ -254,6 +300,8 @@ export function ActionPanel() {
   const holding = useStore((s) => s.holding)
   const nearStroller = useStore((s) => s.nearStroller)
   const nearNiro = useStore((s) => s.nearNiro)
+  const nearStory = useStore((s) => s.nearStory)
+  const nearNotion = useStore((s) => s.nearNotion)
   const riding = useStore((s) => s.riding)
   const strollerBusy = useStore((s) => Object.values(s.remotes).some((r) => r.riding))
   const sitting = useStore((s) => s.sitting)
@@ -262,11 +310,12 @@ export function ActionPanel() {
   const deskNotes = useStore((s) => s.deskNotes)
   if (!joined || modal) return null
   const countFor = (name) => deskNotes.filter((n) => n.seat === name).length
+  // 💌 비밀 쪽지는 책상 주인만 열어볼 수 있음
   const listBtn = (name) => {
     const c = countFor(name)
-    return c > 0 ? (
+    return c > 0 && me.name === name ? (
       <button className="act b-light" onClick={() => useStore.getState().set({ modal: { deskList: name } })}>
-        📬 쪽지 {c}개 보기
+        📬 내 쪽지 {c}개 보기
       </button>
     ) : null
   }
@@ -298,41 +347,49 @@ export function ActionPanel() {
           </button>
           {me.name !== s.name && (
             <button className="act b-letter" onClick={() => useStore.getState().set({ modal: { deskWrite: nearSeat } })}>
-              💌 책상에 쪽지 남기기
+              💌 비밀 쪽지 남기기
             </button>
           )}
           {listBtn(s.name)}
         </div>
       )
     }
-    if (nearCoffee && holding !== 'coffee') {
+    if (inPantry) {
+      // 탕비실: 간식 투표 + 점심 룰렛만
       groups.push(
-        <div className="act-group" key="coffee">
-          <div className="act-title">☕ 커피머신</div>
-          <button className="act b-coffee" onClick={brewCoffee}>
-            ☕ 커피 한잔 뽑기
+        <div className="act-group" key="pantry">
+          <div className="act-title">탕비실</div>
+          <button className="act b-vote" onClick={() => useStore.getState().set({ modal: 'vote' })}>
+            🗳️ 간식 투표하기
+          </button>
+          <button className="act b-roulette" onClick={() => useStore.getState().set({ modal: 'roulette' })}>
+            🎰 룰렛 돌리기
           </button>
         </div>
       )
     }
-    if (inPantry) {
-      const act = (kind) => {
-        const st = useStore.getState()
-        st.doAction(kind)
-        sysMsg(`🍪 ${st.me.name} ${st.me.title}님이 간식을 먹고 있어요.`)
-      }
+    if (nearStory) {
       groups.push(
-        <div className="act-group" key="pantry">
-          <div className="act-title">탕비실</div>
-          <button className="act b-snack" onClick={() => act('snack')}>
-            🍪 간식 먹기
-          </button>
-          <button className="act b-vote" onClick={() => useStore.getState().set({ modal: 'vote' })}>
-            🗳️ 간식 투표하기
-          </button>
+        <div className="act-group" key="story">
+          <div className="act-title">다목적실 게시판</div>
           <button className="act b-story" onClick={() => useStore.getState().set({ modal: 'stories' })}>
             🏛️ 오늘의 건축 이야기 보기
           </button>
+        </div>
+      )
+    }
+    if (nearNotion) {
+      groups.push(
+        <div className="act-group" key="notion">
+          <div className="act-title">관리부 수납장</div>
+          <button className="act b-notion" onClick={openNotion}>
+            📌 사내 공지·서식함(Notion) 열기
+          </button>
+          {isAdminDept(me) && (
+            <button className="act b-light" onClick={() => useStore.getState().set({ modal: 'notionEdit' })}>
+              ⚙️ 노션 링크 수정
+            </button>
+          )}
         </div>
       )
     }
@@ -405,7 +462,7 @@ export function ActionPanel() {
         </div>
       )
     }
-    if (nearRoulette) {
+    if (nearRoulette && !inPantry) {
       groups.push(
         <div className="act-group" key="roulette">
           <div className="act-title">점심 룰렛</div>
@@ -444,6 +501,16 @@ export function ActionPanel() {
   }
   if (!groups.length) return null
   return <div className="actions">{groups}</div>
+}
+
+// 📌 노션 열기 (클릭 이벤트 안에서 바로 새 창으로)
+function openNotion() {
+  const url = useStore.getState().notionUrl
+  if (!url) {
+    sysMsg(isAdminDept(useStore.getState().me) ? '📌 아직 노션 링크가 없어요. [⚙️ 노션 링크 수정]에서 등록해 주세요.' : '📌 아직 노션 링크가 등록되지 않았어요. 관리부에 문의해 주세요.')
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 function brewCoffee() {
@@ -487,6 +554,9 @@ export function Modals() {
   if (modal === 'dday') return <DdayModal onClose={close} />
   if (modal === 'models') return <ModelsModal onClose={close} />
   if (modal === 'niro') return <NiroModal onClose={close} />
+  if (modal === 'notionEdit') return <NotionEditModal onClose={close} />
+  if (modal === 'vacation') return <VacationModal onClose={close} />
+  if (modal === 'people') return <PeopleModal onClose={close} />
   if (modal.note) return <NoteView note={modal.note} onClose={close} back={modal.back} />
   if (modal.deskWrite !== undefined) return <DeskWrite idx={modal.deskWrite} onClose={close} />
   if (modal.deskNote) return <DeskNoteView note={modal.deskNote} onClose={close} back={modal.back} />
@@ -621,20 +691,27 @@ const seatLabel = (name) => {
 }
 const fullDate = (t) => (t ? new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '')
 
+// 쪽지 내용 한 줄 요약 (부재중 전화는 발신자·연락처 포함)
+const noteHead = (n) => (n.kind === 'call' ? `📞 부재중 전화${n.caller ? ` · ${n.caller}` : ''}${n.phone ? ` (${n.phone})` : ''}` : '💬 일반 쪽지')
+
 function DeskWrite({ idx, onClose }) {
   const seat = seats[idx]
   const me = useStore((s) => s.me)
+  const [kind, setKind] = useState('note')
   const [color, setColor] = useState(DESK_COLORS[0].c)
   const [text, setText] = useState('')
+  const [caller, setCaller] = useState('')
+  const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
+  const ok = kind === 'call' ? caller.trim() || text.trim() : text.trim()
   const submit = async (e) => {
     e.preventDefault()
-    const t = text.trim()
-    if (!t || busy) return
+    if (!ok || busy) return
     setBusy(true)
     try {
-      await addDeskNote({ seat: seat.name, text: t, color })
-      sysMsg(`💌 ${me.name} ${me.title}님이 ${seat.name} ${seat.title}님 책상에 쪽지를 남겼어요.`)
+      const body = text.trim() || (kind === 'call' ? '전화 왔었어요. 확인 부탁드려요.' : '')
+      await addDeskNote({ seat: seat.name, kind, caller, phone, text: body, color: kind === 'call' ? '#f8bbd0' : color })
+      sysMsg(`${kind === 'call' ? '📞' : '💌'} ${seat.name} ${seat.title}님 책상에 ${kind === 'call' ? '부재중 전화 메모' : '비밀 쪽지'}를 남겼어요. (본인만 볼 수 있어요)`)
       onClose()
     } catch (e2) {
       console.warn(e2)
@@ -644,26 +721,56 @@ function DeskWrite({ idx, onClose }) {
   }
   return (
     <Sheet onClose={onClose}>
-      <h2>💌 책상에 쪽지 남기기</h2>
-      <p className="sub">모니터 귀퉁이에 포스트잇으로 붙여 둘게요.</p>
+      <h2>💌 비밀 쪽지 남기기</h2>
+      <p className="sub">
+        {seat.name} {seat.title}님 책상에 포스트잇으로 붙여요 · 🔒 책상 주인만 내용을 볼 수 있어요
+      </p>
+      <div className="kind-seg">
+        <button type="button" className={kind === 'note' ? 'on' : ''} onClick={() => setKind('note')}>
+          💬 일반 쪽지
+        </button>
+        <button type="button" className={kind === 'call' ? 'on call' : ''} onClick={() => setKind('call')}>
+          📞 부재중 전화 메모
+        </button>
+      </div>
       <form onSubmit={submit} className="note-form">
-        <div className="note-preview desk" style={{ background: color }}>
-          <div className="to">
-            To. {seat.name} {seat.title}님
+        {kind === 'call' && (
+          <div className="row2">
+            <label className="field">
+              <span>전화 주신 분</span>
+              <input value={caller} onChange={(e) => setCaller(e.target.value)} maxLength={20} placeholder="예: 안양시청 건축과 김주무관" autoFocus />
+            </label>
+            <label className="field">
+              <span>연락처</span>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} inputMode="tel" placeholder="예: 031-000-0000" />
+            </label>
           </div>
-          <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} maxLength={50} placeholder={`${seat.title}님, 다녀오시면 전화 부탁드려요!`} />
+        )}
+        <div className="note-preview desk" style={{ background: kind === 'call' ? '#f8bbd0' : color }}>
+          <div className="to">
+            {kind === 'call' ? '📞' : '💌'} To. {seat.name} {seat.title}님
+          </div>
+          <textarea
+            autoFocus={kind === 'note'}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={80}
+            placeholder={kind === 'call' ? '용건 (예: 인허가 서류 관련, 오후에 회신 부탁)' : `${seat.title}님, 다녀오시면 전화 부탁드려요!`}
+          />
           <div className="from">
             - {me.name} {me.title}
           </div>
-          <span className="cnt">{text.length}/50</span>
+          <span className="cnt">{text.length}/80</span>
         </div>
-        <div className="swatches big">
-          {DESK_COLORS.map((c) => (
-            <button type="button" key={c.c} title={c.n} className={color === c.c ? 'on' : ''} style={{ background: c.c }} onClick={() => setColor(c.c)} />
-          ))}
-        </div>
-        <button className="go" disabled={!text.trim() || busy}>
-          {busy ? '붙이는 중…' : '📌 책상에 붙이기'}
+        {kind === 'note' && (
+          <div className="swatches big">
+            {DESK_COLORS.map((c) => (
+              <button type="button" key={c.c} title={c.n} className={color === c.c ? 'on' : ''} style={{ background: c.c }} onClick={() => setColor(c.c)} />
+            ))}
+          </div>
+        )}
+        <button className="go" disabled={!ok || busy}>
+          {busy ? '붙이는 중…' : '🔒 비밀 쪽지 붙이기'}
         </button>
       </form>
     </Sheet>
@@ -673,15 +780,31 @@ function DeskWrite({ idx, onClose }) {
 function DeskNoteView({ note, onClose, back }) {
   const me = useStore((s) => s.me)
   const [busy, setBusy] = useState(false)
-  const done = async () => {
+  const owner = me && me.name === note.seat
+  if (!owner)
+    return (
+      <Sheet onClose={onClose} className="lock-sheet">
+        <div className="lock-big">🔒</div>
+        <h2>본인만 확인할 수 있는 비밀 쪽지입니다.</h2>
+        <p className="sub">
+          {seatLabel(note.seat)}님 책상에 붙은 {note.kind === 'call' ? '📞 부재중 전화 메모' : '💬 쪽지'}예요.
+        </p>
+        <div className="sheet-foot center">
+          <button className="go small" onClick={onClose}>
+            확인
+          </button>
+        </div>
+      </Sheet>
+    )
+  const run = async (fn, msg) => {
     setBusy(true)
     try {
-      await archiveDeskNote(note)
-      sysMsg(`✅ ${me.name} ${me.title}님이 ${seatLabel(note.seat)}님 책상의 쪽지를 확인했어요. (📬 보관함으로 이동)`)
+      await fn(note)
+      sysMsg(msg)
       useStore.getState().set({ modal: back || null })
     } catch (e) {
       console.warn(e)
-      sysMsg('⚠️ 쪽지를 보관함으로 옮기지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+      sysMsg('⚠️ 처리하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
       setBusy(false)
     }
   }
@@ -689,7 +812,7 @@ function DeskNoteView({ note, onClose, back }) {
     <Sheet onClose={onClose} className="note-sheet">
       <div className="note-big" style={{ background: note.color }}>
         <span className="pin tape" />
-        <div className="to">💌 To. {seatLabel(note.seat)}님</div>
+        <div className="to">{noteHead(note)}</div>
         <p>{note.text}</p>
         <div className="by">
           - {note.name} {note.title}
@@ -702,28 +825,41 @@ function DeskNoteView({ note, onClose, back }) {
             ← 목록으로
           </button>
         )}
-        <button className="go small ok" onClick={done} disabled={busy}>
-          ✅ 확인 완료 (떼어내기)
+        <button className="ghost danger" disabled={busy} onClick={() => run(async (n) => (await deleteArchivedLive(n)), '🗑️ 쪽지를 삭제했어요.')}>
+          🗑️ 삭제
+        </button>
+        <button className="go small ok" onClick={() => run(archiveDeskNote, '✅ 쪽지를 확인했어요. (📬 보관함으로 이동)')} disabled={busy}>
+          ✅ 확인 완료 (보관함)
         </button>
       </div>
-      <p className="note-hint">떼어낸 쪽지는 상단의 📬 쪽지 보관함에서 다시 볼 수 있어요.</p>
     </Sheet>
   )
 }
+// 책상에 붙은 쪽지를 보관함 없이 바로 삭제
+const deleteArchivedLive = (n) => removeDeskNote(n)
 
 function DeskList({ name, onClose }) {
   const all = useStore((s) => s.deskNotes)
+  const me = useStore((s) => s.me)
   const notes = all.filter((n) => n.seat === name)
   useEffect(() => {
     if (!notes.length) onClose()
   }, [notes.length])
+  if (!me || me.name !== name)
+    return (
+      <Sheet onClose={onClose} className="lock-sheet">
+        <div className="lock-big">🔒</div>
+        <h2>본인만 확인할 수 있는 비밀 쪽지입니다.</h2>
+      </Sheet>
+    )
   return (
     <Sheet onClose={onClose}>
-      <h2>📬 {seatLabel(name)}님 책상의 쪽지</h2>
+      <h2>📬 내 책상의 비밀 쪽지</h2>
       <p className="sub">{notes.length}개 · 눌러서 읽고 확인 완료하면 보관함으로 이동해요</p>
       <div className="desk-list">
         {notes.map((n) => (
           <button key={n.id} className="dl-item" style={{ background: n.color }} onClick={() => useStore.getState().set({ modal: { deskNote: n, back: { deskList: name } } })}>
+            <span className="dl-kind">{noteHead(n)}</span>
             <span className="dl-text">{n.text}</span>
             <span className="dl-by">
               - {n.name} {n.title} · {fullDate(n.at)}
@@ -735,47 +871,26 @@ function DeskList({ name, onClose }) {
   )
 }
 
-/* ───────────────────── 📬 쪽지 보관함 ───────────────────── */
+/* ───────────────────── 📬 쪽지 보관함 (내 자리 것만) ───────────────────── */
 function ArchiveModal({ onClose }) {
   const archive = useStore((s) => s.deskArchive)
   const me = useStore((s) => s.me)
   const mySeat = seatByName(me.name) ? me.name : null
-  const [filter, setFilter] = useState(mySeat || 'all')
-  const counts = useMemo(() => {
-    const c = {}
-    for (const n of archive) c[n.seat] = (c[n.seat] || 0) + 1
-    return c
-  }, [archive])
-  const seatsWithNotes = seats.filter((s) => counts[s.name])
-  const shown = filter === 'all' ? archive : archive.filter((n) => n.seat === filter)
+  const mine = mySeat ? archive.filter((n) => n.seat === mySeat) : []
   return (
     <Sheet onClose={onClose} wide>
-      <h2>📬 쪽지 보관함</h2>
-      <p className="sub">확인 완료한 책상 쪽지를 자리별로 다시 볼 수 있어요 · 총 {archive.length}개</p>
-      <div className="arch-tabs">
-        <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>
-          전체 <b>{archive.length}</b>
-        </button>
-        {mySeat && !counts[mySeat] && (
-          <button className={filter === mySeat ? 'on' : ''} onClick={() => setFilter(mySeat)}>
-            ⭐ 내 자리 <b>0</b>
-          </button>
-        )}
-        {seatsWithNotes.map((s) => (
-          <button key={s.name} className={filter === s.name ? 'on' : ''} onClick={() => setFilter(s.name)}>
-            {s.name === mySeat && '⭐ '}
-            {s.name} {s.title} <b>{counts[s.name]}</b>
-          </button>
-        ))}
-      </div>
+      <h2>📬 내 쪽지 보관함</h2>
+      <p className="sub">
+        {mySeat ? `확인 완료한 내 책상(${seatLabel(mySeat)})의 쪽지 · 총 ${mine.length}개 · 🔒 본인만 볼 수 있어요` : '직원 명단에 있는 이름으로 입장하면 내 책상의 쪽지 보관함을 볼 수 있어요.'}
+      </p>
       <div className="arch-list">
-        {shown.length === 0 && <div className="room-empty">보관된 쪽지가 없어요.</div>}
-        {shown.map((n) => (
+        {mySeat && mine.length === 0 && <div className="room-empty">보관된 쪽지가 없어요.</div>}
+        {mine.map((n) => (
           <div key={n.id} className="arch-item">
             <span className="arch-color" style={{ background: n.color }} />
             <button className="arch-main" onClick={() => useStore.getState().set({ modal: { archived: n } })}>
               <div className="arch-top">
-                <b>To. {seatLabel(n.seat)}</b>
+                <b>{noteHead(n)}</b>
                 <span>
                   보낸 사람 {n.name} {n.title}
                 </span>
@@ -783,7 +898,7 @@ function ArchiveModal({ onClose }) {
               <div className="arch-text">{n.text}</div>
               <div className="arch-meta">
                 받은 시간 {fullDate(n.at)}
-                {n.checkedAt ? ` · 확인 ${fullDate(n.checkedAt)}${n.checkedBy ? ` (${n.checkedBy})` : ''}` : ''}
+                {n.checkedAt ? ` · 확인 ${fullDate(n.checkedAt)}` : ''}
               </div>
             </button>
             <button
@@ -809,6 +924,14 @@ function ArchiveModal({ onClose }) {
 }
 
 function ArchivedView({ note, onClose }) {
+  const me = useStore((s) => s.me)
+  if (!me || me.name !== note.seat)
+    return (
+      <Sheet onClose={onClose} className="lock-sheet">
+        <div className="lock-big">🔒</div>
+        <h2>본인만 확인할 수 있는 비밀 쪽지입니다.</h2>
+      </Sheet>
+    )
   return (
     <Sheet onClose={onClose} className="note-sheet">
       <div className="note-big archived" style={{ background: note.color }}>
@@ -1130,7 +1253,7 @@ export function HUD() {
   const mood = useStore((s) => s.mood)
   const status = useStore((s) => s.status)
   const netMode = useStore((s) => s.netMode)
-  const archiveCount = useStore((s) => s.deskArchive.length)
+  const archiveCount = useStore((s) => (s.me ? s.deskArchive.filter((n) => n.seat === s.me.name).length : 0))
   const [open, setOpen] = useState(false)
   const [clock, setClock] = useState(fmtTime(new Date()))
   useEffect(() => {
@@ -1142,7 +1265,7 @@ export function HUD() {
   const pickMood = (m) => useStore.getState().set({ mood: m })
   const pickStatus = (s) => {
     useStore.getState().set({ status: s })
-    sysMsg(`${s.e} ${me.name} ${me.title}님 상태: ${s.l}`)
+    if (s.e !== '🚗') sysMsg(`${s.e} ${me.name} ${me.title}님 상태: ${s.l}`)
   }
   return (
     <>
@@ -1150,9 +1273,9 @@ export function HUD() {
         <div className="pill strong">🏢 건축사사무소</div>
         <div className="pill">📍 {zone}</div>
         <div className="pill">🕘 {clock}</div>
-        <div className="pill" title={netMode === 'firebase' ? 'Firebase로 동료와 실시간 공유 중' : 'Firebase 미설정: 같은 브라우저의 다른 탭과만 공유 중'}>
-          <span className="live" /> 접속 {online}명{netMode !== 'firebase' && <em className="local-badge">로컬 모드</em>}
-        </div>
+        <button className="pill people-pill" onClick={() => useStore.getState().set({ modal: 'people' })} title="접속자 목록 보기">
+          <span className="live" /> 접속 {online}명 ▾{netMode !== 'firebase' && <em className="local-badge">로컬 모드</em>}
+        </button>
       </div>
       <div className="hud-right">
         <AmbienceControls />
@@ -1194,12 +1317,18 @@ export function HUD() {
                 </button>
               ))}
             </div>
+            {status.e === '🚗' && <OutingForm />}
             <button className="mp-done" onClick={() => setOpen(false)}>
               완료
             </button>
           </div>
         )}
         <div className="me-row">
+          {isAdminDept(me) && (
+            <button className="archive-btn vac-btn" onClick={() => useStore.getState().set({ modal: 'vacation' })}>
+              🏖️ 직원 휴가 관리
+            </button>
+          )}
           <button className="archive-btn" onClick={() => useStore.getState().set({ modal: 'archive' })}>
             📬 쪽지 보관함{archiveCount > 0 && <b>{archiveCount}</b>}
           </button>
@@ -1606,6 +1735,194 @@ function AccessoryButton() {
   )
 }
 
+/* ───────────────────── 🚗 외근 행선지 · 복귀 시간 ───────────────────── */
+function OutingForm() {
+  const outing = useStore((s) => s.outing)
+  const me = useStore((s) => s.me)
+  const [dest, setDest] = useState(outing?.dest || '')
+  const [until, setUntil] = useState(outing?.until || '')
+  const save = (e) => {
+    e.preventDefault()
+    const o = { dest: dest.trim().slice(0, 20), until: /^\d{2}:\d{2}$/.test(until) ? until : '' }
+    if (!o.dest) return
+    useStore.getState().set({ outing: o })
+    try {
+      localStorage.setItem('archi-office-3d-outing', JSON.stringify(o))
+    } catch {}
+    sysMsg(`${outingText(o)} — ${me.name} ${me.title}님 외근 중`)
+  }
+  return (
+    <form className="outing-form" onSubmit={save}>
+      <div className="mp-title">🚗 행선지 · 복귀 예정</div>
+      <div className="of-row">
+        <input value={dest} onChange={(e) => setDest(e.target.value)} maxLength={20} placeholder="예: 과천시청" autoFocus />
+        <input type="time" value={until} onChange={(e) => setUntil(e.target.value)} />
+      </div>
+      <button className="of-save" disabled={!dest.trim()}>
+        {outing && outing.dest === dest.trim() && (outing.until || '') === until ? '✓ 표시 중' : '머리 위에 표시하기'}
+      </button>
+    </form>
+  )
+}
+
+/* ───────────────────── 👥 접속자 목록 ───────────────────── */
+function PeopleModal({ onClose }) {
+  const me = useStore((s) => s.me)
+  const remotes = useStore((s) => s.remotes)
+  const mood = useStore((s) => s.mood)
+  const status = useStore((s) => s.status)
+  const outing = useStore((s) => s.outing)
+  const vacations = useStore((s) => s.vacations)
+  const zoneOf = (r) => (r.x != null ? zoneAtPos(r.x, r.z) : '')
+  const people = [
+    { key: 'me', name: me.name, title: me.title, shirt: me.shirt, mood: mood.e, st: `${status.e} ${status.l}`, outing: status.e === '🚗' ? outing : null, zone: useStore.getState().zone, mine: true },
+    ...Object.values(remotes)
+      .filter((r) => r.name)
+      .map((r) => ({ key: r.id, name: r.name, title: r.title, shirt: r.shirt, mood: r.mood, st: r.status ? `${r.status} ${STATUS_NAME[r.status] || ''}` : '', outing: r.outing, zone: zoneOf(r) })),
+  ]
+  const away = Object.keys(vacations).filter((n) => !people.some((p) => p.name === n))
+  return (
+    <Sheet onClose={onClose}>
+      <h2>👥 지금 접속 중 {people.length}명</h2>
+      <div className="people-list">
+        {people.map((p) => (
+          <div key={p.key} className={'pl-item' + (p.mine ? ' mine' : '')}>
+            <span className="ava" style={{ background: p.shirt }}>
+              {p.name[0]}
+              <span className="ava-mood">{p.mood}</span>
+            </span>
+            <div className="pl-body">
+              <b>
+                {p.name} <small>{p.title}</small> {p.mine && <em>나</em>} {vacations[p.name] && <span className="vac-chip">🏖️ 휴가중</span>}
+              </b>
+              <span>{p.outing && p.outing.dest ? outingText(p.outing) : `${p.st} · 📍 ${p.zone}`}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {away.length > 0 && (
+        <>
+          <div className="mp-title" style={{ marginTop: 14 }}>
+            🏖️ 휴가중
+          </div>
+          <div className="chips">
+            {away.map((n) => (
+              <span key={n} className="chip">
+                {seatOf(n) ? `${n} ${seatOf(n).title}` : n}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </Sheet>
+  )
+}
+const STATUS_NAME = { '💻': '업무중', '☕': '탕비실', '🚗': '외근/현장', '🏃': '칼퇴대기' }
+
+/* ───────────────────── 🏖️ 직원 휴가 관리 (관리부) ───────────────────── */
+function VacationModal({ onClose }) {
+  const me = useStore((s) => s.me)
+  const vacations = useStore((s) => s.vacations)
+  const [busy, setBusy] = useState(null)
+  if (!isAdminDept(me))
+    return (
+      <Sheet onClose={onClose} className="lock-sheet">
+        <div className="lock-big">🔒</div>
+        <h2>{ADMIN_ONLY_MSG}</h2>
+      </Sheet>
+    )
+  const groups = {}
+  for (const st of seats) (groups[st.dept] ||= []).push(st)
+  const toggle = async (st, on) => {
+    setBusy(st.name)
+    try {
+      await setVacation(st.name, on)
+      sysMsg(on ? `🏖️ ${st.name} ${st.title}님 휴가 등록` : `🏢 ${st.name} ${st.title}님 휴가 해제`)
+    } catch (e) {
+      console.warn(e)
+      sysMsg('⚠️ 저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+    }
+    setBusy(null)
+  }
+  const count = Object.keys(vacations).length
+  return (
+    <Sheet onClose={onClose} wide>
+      <h2>🏖️ 직원 휴가 관리</h2>
+      <p className="sub">체크한 직원은 책상 이름표와 캐릭터 머리 위에 [🏖️ 휴가중] 배지가 표시돼요 · 현재 {count}명 휴가중</p>
+      {Object.entries(groups).map(([dept, list]) => (
+        <div key={dept} className="vac-group">
+          <div className="mp-title">{dept}</div>
+          <div className="vac-grid">
+            {list.map((st) => {
+              const on = !!vacations[st.name]
+              return (
+                <label key={st.name} className={'person' + (on ? ' on vac' : '')}>
+                  <input type="checkbox" checked={on} disabled={busy === st.name} onChange={(e) => toggle(st, e.target.checked)} />
+                  <span className="pn">
+                    {st.name} <small>{st.title}</small>
+                  </span>
+                  {on && <span className="vac-chip">🏖️ 휴가중</span>}
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </Sheet>
+  )
+}
+
+/* ───────────────────── 📌 노션 링크 수정 (관리부) ───────────────────── */
+function NotionEditModal({ onClose }) {
+  const me = useStore((s) => s.me)
+  const cur = useStore((s) => s.notionUrl)
+  const [url, setUrl] = useState(cur || '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (!isAdminDept(me))
+    return (
+      <Sheet onClose={onClose} className="lock-sheet">
+        <div className="lock-big">🔒</div>
+        <h2>{ADMIN_ONLY_MSG}</h2>
+      </Sheet>
+    )
+  const save = async (e) => {
+    e.preventDefault()
+    const u = url.trim()
+    if (!/^https:\/\/[^\s]+$/.test(u)) return setErr('https:// 로 시작하는 노션 링크를 넣어 주세요.')
+    setBusy(true)
+    try {
+      await saveNotionUrl(u)
+      sysMsg(`📌 ${me.name} ${me.title}님이 사내 공지·서식함 노션 링크를 바꿨어요.`)
+      onClose()
+    } catch (e2) {
+      console.warn(e2)
+      setErr('저장하지 못했어요. (Firebase 보안 규칙을 확인해 주세요)')
+      setBusy(false)
+    }
+  }
+  return (
+    <Sheet onClose={onClose}>
+      <h2>⚙️ 노션 링크 수정</h2>
+      <p className="sub">관리부 수납장 위 [📌 사내 공지·서식함]이 열 노션 페이지 주소예요. 노션에서 [공유] → [웹에 게시] 또는 링크 복사로 받은 주소를 넣어 주세요.</p>
+      <form className="model-form" onSubmit={save}>
+        <input value={url} onChange={(e) => (setUrl(e.target.value), setErr(''))} placeholder="https://www.notion.so/..." autoFocus />
+        {err && <div className="err">{err}</div>}
+        <div className="sheet-foot">
+          {cur && (
+            <a className="ghost" href={cur} target="_blank" rel="noopener noreferrer">
+              현재 링크 열어보기 ↗
+            </a>
+          )}
+          <button className="go small" disabled={busy || !url.trim()}>
+            {busy ? '저장 중…' : '저장'}
+          </button>
+        </div>
+      </form>
+    </Sheet>
+  )
+}
+
 /* ───────────────────── 🌤️ 과천시 실시간 날씨 ───────────────────── */
 const PREVIEW_LABEL = { snow: '❄️ 눈', rain: '🌧️ 비', none: '☀️ 맑음' }
 function WeatherPill() {
@@ -1835,7 +2152,9 @@ function DdayModal({ onClose }) {
   const [name, setName] = useState('')
   const [date, setDate] = useState(kstToday())
   const [busy, setBusy] = useState(false)
+  const admin = isAdminDept(me) // 📅 일정 추가·수정·삭제는 관리부만
   const startEdit = (p) => {
+    if (!admin) return sysMsg(`🔒 ${ADMIN_ONLY_MSG}`)
     setEditing(p || 'new')
     setName(p ? p.name : '')
     setDate(p ? p.date : kstToday())
@@ -1878,15 +2197,19 @@ function DdayModal({ onClose }) {
                   {p.date.replace(/-/g, '.')} · {p.by} 등록
                 </span>
               </div>
-              <button className="ghost" onClick={() => startEdit(p)}>
-                ✏️ 수정
-              </button>
-              <button
-                className="ghost danger"
-                onClick={() => askConfirm({ title: `'${p.name}' 마감을 삭제할까요?`, okText: '삭제', danger: true, onOk: () => removeDday(p) })}
-              >
-                🗑️
-              </button>
+              {admin && (
+                <>
+                  <button className="ghost" onClick={() => startEdit(p)}>
+                    ✏️ 수정
+                  </button>
+                  <button
+                    className="ghost danger"
+                    onClick={() => askConfirm({ title: `'${p.name}' 마감을 삭제할까요?`, okText: '삭제', danger: true, onOk: () => removeDday(p) })}
+                  >
+                    🗑️
+                  </button>
+                </>
+              )}
             </div>
           )
         })}
@@ -1908,12 +2231,14 @@ function DdayModal({ onClose }) {
             </button>
           </div>
         </form>
-      ) : (
+      ) : admin ? (
         <div className="sheet-foot">
           <button className="go small" onClick={() => startEdit(null)}>
             + 마감 등록
           </button>
         </div>
+      ) : (
+        <div className="admin-only">🔒 {ADMIN_ONLY_MSG}</div>
       )}
     </Sheet>
   )

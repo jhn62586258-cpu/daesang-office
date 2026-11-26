@@ -61,7 +61,7 @@
       ],
       "$noteId": {
         ".write": "auth != null",
-        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber() && (!newData.child('kind').exists() || newData.child('kind').val() == 'note' || newData.child('kind').val() == 'call') && (!newData.child('caller').exists() || (newData.child('caller').isString() && newData.child('caller').val().length <= 20)) && (!newData.child('phone').exists() || (newData.child('phone').isString() && newData.child('phone').val().length <= 20))"
       }
     },
     "desk_notes_archive": {
@@ -71,7 +71,7 @@
       ],
       "$noteId": {
         ".write": "auth != null",
-        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber()"
+        ".validate": "newData.child('text').isString() && newData.child('text').val().length <= 80 && newData.child('seat').isString() && newData.child('at').isNumber() && (!newData.child('kind').exists() || newData.child('kind').val() == 'note' || newData.child('kind').val() == 'call') && (!newData.child('caller').exists() || (newData.child('caller').isString() && newData.child('caller').val().length <= 20)) && (!newData.child('phone').exists() || (newData.child('phone').isString() && newData.child('phone').val().length <= 20))"
       }
     },
     "snack_options": {
@@ -145,6 +145,18 @@
       "$logId": {
         ".write": "auth != null && ((!data.exists() && newData.child('by').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('by').val() === auth.uid))",
         ".validate": "newData.hasChildren(['driver', 'date', 'depTime', 'arrTime', 'dest', 'purpose', 'odoStart', 'odoEnd', 'distance', 'fuel', 'sign', 'at', 'by']) && newData.child('driver').isString() && newData.child('driver').val().length >= 1 && newData.child('driver').val().length <= 20 && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('depTime').val().matches(/^[0-9]{2}:[0-9]{2}$/) && newData.child('arrTime').val().matches(/^[0-9]{2}:[0-9]{2}$/) && newData.child('dest').isString() && newData.child('dest').val().length <= 60 && newData.child('purpose').isString() && newData.child('purpose').val().length <= 60 && newData.child('odoStart').isNumber() && newData.child('odoEnd').isNumber() && newData.child('distance').isNumber() && newData.child('distance').val() >= 0 && (newData.child('fuel').val() === 'Full' || newData.child('fuel').val() === '3/4' || newData.child('fuel').val() === '1/2' || newData.child('fuel').val() === '1/4' || newData.child('fuel').val() === '경고등') && newData.child('sign').isString() && newData.child('sign').val().beginsWith('data:image/png;base64,') && newData.child('sign').val().length <= 150000 && newData.child('at').isNumber()"
+      }
+    },
+    "office_notion_url": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".validate": "!newData.exists() || (newData.child('url').isString() && newData.child('url').val().beginsWith('https://') && newData.child('url').val().length <= 500)"
+    },
+    "vacation_status": {
+      ".read": "auth != null",
+      "$name": {
+        ".write": "auth != null",
+        ".validate": "$name.length <= 20 && newData.child('on').isBoolean()"
       }
     }
   }
